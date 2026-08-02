@@ -2,8 +2,9 @@
 
 > Ce que la machine **est**, ce qu'elle **sait faire**, et ce qu'elle **refuse**.
 >
-> Trois campagnes : **25-27/07/2026** (WebGPU, cycle de vie) et **01/08/2026** (GitHub, réseau,
-> outillage). Tout ce qui suit est **mesuré depuis l'intérieur**, sondes à l'appui — sauf
+> Quatre campagnes : **25-27/07/2026** (WebGPU, cycle de vie), **01/08/2026** (GitHub, réseau,
+> outillage) et **02/08/2026** (tunnels sortants, §3 bis). Tout ce qui suit est **mesuré depuis
+> l'intérieur**, sondes à l'appui — sauf
 > mention explicite. Les sondes sont dans `probes/`, rejouables.
 
 ⚠️ **Une VM n'est pas l'autre.** Le silicium, les ports du proxy et les révisions d'outils
@@ -119,6 +120,113 @@ CA bundle en `/root/.ccr/ca-bundle.crt`, `NODE_EXTRA_CA_CERTS` déjà pointé de
 > ```
 > Ce n'est donc pas un simple tunnel : c'est un **point d'application de politique**, qui
 > connaît le périmètre de la session. Retenir la formulation — elle explique le §4.
+
+---
+
+## 3 bis. ⭐ Tunnels sortants — Tailscale passe, Cloudflare Tunnel non (mesuré le 02/08/2026)
+
+Question posée : peut-on monter un tunnel depuis la VM (joindre une machine distante, exposer
+un service de la VM) ? **Réponse mesurée : Tailscale oui, Cloudflare Tunnel non** — et la raison
+n'est ni le client ni les privilèges, c'est **une seule ligne de politique réseau**.
+
+### Les prérequis locaux sont tous réunis — et ne servent à rien
+
+| | Mesuré 02/08 |
+|---|---|
+| uid | **0 (root)** |
+| `CapEff` | `000001fffeffffff` — **toutes les capabilities**, `CAP_NET_ADMIN` compris |
+| `/dev/net/tun` | **présent** (`crw------- 10, 200`) |
+| `tailscale(d)` · `cloudflared` · `wg` · `ssh` préinstallés | **aucun** — mais tous téléchargeables (`pkgs.tailscale.com`, releases GitHub : HTTP 200) |
+
+> ⚠️ **Ne pas s'arrêter là.** root + `/dev/net/tun` fait croire que tout est permis. Ces
+> prérequis sont **nécessaires et pas suffisants** : ce qui décide est en amont, dans le filtre
+> d'egress, et il ne se voit pas depuis `/proc`.
+
+### ⭐ Le seul tableau qui décide : les ports ouverts en sortie
+
+Testé en **dial direct** (hors `HTTPS_PROXY`), chaque cible connue ouverte sur son port pour
+qu'un échec accuse le filtre et non l'hôte.
+
+| Port | Verdict mesuré |
+|---|---|
+| **TCP 80**, **TCP 443** | ✅ **OUVERT** |
+| **UDP 53** (vers `8.8.8.8`) | ✅ **OUVERT** — réponse en 3-6 ms |
+| TCP 22 (SSH), TCP 853 (DoT) | ❌ `TimeoutError` (~6 s) |
+| 🔴 **TCP 7844** (edge Cloudflare Tunnel) | ❌ `TimeoutError` |
+| 🔴 **UDP 7844** (QUIC), **UDP 3478/19302** (STUN), **TCP 41641** (WireGuard) | ❌ aucune réponse |
+
+> ⭐ **La règle, et elle explique tout le reste : l'egress se limite à TCP/80, TCP/443 et
+> UDP/53.** Le filtrage est **par port, pas par protocole** — l'UDP n'est pas mort en bloc,
+> UDP/53 répond (témoin explicite dans la sonde). Ce n'est **pas** le proxy de session : c'est
+> une couche réseau *sous* lui, et **le proxy y est soumis lui aussi** (voir plus bas).
+
+### Les deux clients, mesurés
+
+| | Tailscale 1.98.10 | cloudflared 2026.7.3 |
+|---|---|---|
+| Téléchargement du binaire | ✅ | ✅ |
+| Démarrage du démon | ✅ `--tun=userspace-networking` | ✅ |
+| **Plan de contrôle** | ✅ `controlplane.tailscale.com:443` joint, **nœud enregistré, AuthURL délivrée** | ✅ tunnel créé, **hostname `*.trycloudflare.com` attribué** |
+| **Plan de données** | ✅ **DERP en TCP/443** — les 26 relais répondent | 🔴 **échec** : `dial tcp …:7844: i/o timeout` en QUIC **et** en `--protocol http2` |
+| Verdict | ✅ **passe**, en mode relayé | 🔴 **ne passe pas** |
+
+`tailscale netcheck` (02/08) : `UDP: false` · `Nearest DERP: New York City` · latences DERP
+**52,7 ms (nyc) → 271,9 ms (sin)**, les 26 régions joignables.
+
+> ⭐ **Toute la différence tient au repli.** Les deux clients ont un plan de contrôle en 443 qui
+> passe sans effort — c'est trompeur, cloudflared vous rend une URL publique avant d'échouer.
+> Mais **Tailscale sait replier son plan de données sur TCP/443 (DERP)** quand l'UDP est mort,
+> alors que **le plan de données de cloudflared est cloué sur le port 7844**, en QUIC comme en
+> HTTP/2 — aucun repli 443 n'existe. Le hostname attribué répond **HTTP 530** : Cloudflare a la
+> façade, jamais l'origine.
+>
+> ⇒ **Critère à appliquer à tout futur client de tunnel** : *sait-il parler par TCP/443 seul ?*
+> Si oui il a une chance, sinon c'est mort — inutile de tester.
+
+**Conséquences pratiques**, si on veut s'en servir :
+
+1. Tailscale en session cloud fonctionne **en relais DERP uniquement** — jamais en pair-à-pair.
+   Débit et latence sont ceux d'un relais TCP (≥ 52 ms d'aller simple sur le DERP le plus
+   proche, ici NYC), **pas** ceux de WireGuard direct. Ne pas y faire passer de la vidéo.
+2. L'auth interactive est hors d'atteinte (§7) ⇒ **`tailscale up --auth-key=tskey-…`**, seul
+   chemin non interactif. La clé est un secret : la passer par l'environnement, **jamais dans un
+   dépôt**.
+3. `tailscaled` **honore `HTTPS_PROXY`** (traces `tshttpproxy: CONNECT response … 200` pour
+   `controlplane` et `log.tailscale.com`). Il n'y a rien à configurer.
+4. Pour exposer un service de la VM, Cloudflare Tunnel étant hors-jeu, il reste Tailscale
+   Funnel — **non mesuré**, il exige un tailnet authentifié.
+
+### ⚠️ Divergence avec le 01/08 : l'allowlist d'hôtes n'était pas là
+
+Le 01/08, `mpv.io` et `api.ipify.org` rendaient `CONNECT tunnel failed, response 403` (§3). Le
+**02/08, `mpv.io` est joignable**, et le proxy relaie sans broncher des hôtes arbitraires
+(`pkgs.tailscale.com`, `region1.v2.argotunnel.com`, releases GitHub). `selective: false`,
+`toolScoped: false` dans les deux relevés.
+
+> ⚠️ **La politique réseau est un réglage d'ENVIRONNEMENT, pas une propriété de la VM.** Les
+> deux mesures sont justes, à des dates et dans des environnements différents. Ce qui est stable
+> d'un relevé à l'autre, ce n'est pas la liste d'hôtes — c'est **la restriction de ports**.
+> ⇒ **Ne jamais conclure « le réseau est ouvert » d'un `curl` qui a marché** : relancer
+> `probes/tunnel_probe.sh`.
+
+### 🔴 Le piège : un `200 Connection Established` ne prouve rien
+
+`CONNECT region1.v2.argotunnel.com:7844` à travers `$HTTPS_PROXY` répond **`HTTP/1.1 200
+Connection Established`** — puis la connexion **pend et se fait reset à +6,2 s**, `time_appconnect`
+restant à `0.000000` : le handshake TLS n'a **jamais** commencé. Le proxy émet son 200 **avant**
+d'avoir joint la cible. Comparaison dans la même sonde : sur un hôte en 443, `time_appconnect`
+vaut ~0,42 s — c'est **ce chiffre**, pas le code de retour, qui distingue un relais réel.
+
+> ⚠️ **Et `recentRelayFailures` reste à `[]`.** Le champ d'introspection recommandé au §3
+> **ne journalise pas ces échecs-là**. Première limite connue de l'outil de diagnostic : il dit
+> qu'il n'a rien vu, pas qu'il n'y a rien eu. (Voir errata 6.)
+
+*Indice de localisation, non concluant* : le profil de latences DERP place la VM près de la côte
+est nord-américaine (nyc 52,7 ms < iad 56,2 < ord 60 ≪ par 129,1). Mais **52 ms jusqu'à NYC est
+trop élevé** pour une VM *dans* cette région, et l'ordre nyc < iad ne cadre pas avec l'hypothèse
+AWS `us-east-1` du §1 — les sondes DERP incluent des handshakes complets, donc plusieurs RTT.
+**À ne pas convertir en conclusion** : c'est exactement le genre d'inférence que l'errata 1
+punit. Le §1 reste « localisation indéterminable ».
 
 ---
 
@@ -253,6 +361,13 @@ ce qui a été fait sur `pxl-airlink` le 01/08.
 | **Autoriser un serveur MCP en OAuth** | le flux est interactif ; en session non-interactive c'est impossible. Vu le 01/08 sur le connecteur Canva. ⇒ passe par les réglages claude.ai de l'utilisateur |
 | Plafonner la VRAM par un flag Chromium | §6 piège 4 |
 
+> ⚠️ **Ce qui n'a pas sa place dans ce tableau : les tunnels sortants.** Cloudflare Tunnel
+> échoue (§3 bis) et Tailscale ne passe qu'en relais DERP — mais **parce que l'egress est
+> restreint à TCP/80, TCP/443 et UDP/53**, et cette restriction est un réglage
+> d'**environnement**, pas une propriété de la VM (elle a déjà divergé entre le 01/08 et le
+> 02/08). Ce n'est donc pas « définitif » : c'est à **re-mesurer** par
+> `probes/tunnel_probe.sh` au début de chaque session qui en dépend.
+
 ---
 
 ## 8. Errata
@@ -292,12 +407,23 @@ ce qui a été fait sur `pxl-airlink` le 01/08.
    filtrer quand la commande de gauche a le droit d'échouer.** (Les deux autres : `$HOME` vaut
    `/root` et non le workdir ; f-string Python avec guillemets doubles imbriqués.)
 
+6. ❌ **« Le proxy de session, lui, relaie le port 7844 — il échappe au filtre. »** (02/08,
+   conclu à chaud d'un `HTTP/1.1 200 Connection Established` sur `CONNECT …:7844`) Faux : le 200
+   est **optimiste**, émis avant que la cible soit jointe ; la connexion pendait et se faisait
+   reset 6,2 s plus tard, `time_appconnect` à zéro. **Leçon : un code de retour d'établissement
+   ne mesure pas l'établissement — c'est le temps de handshake TLS qui tranche.** Aggravant :
+   `recentRelayFailures` est resté vide, donc **l'outil de diagnostic du §3 confirmait
+   l'illusion par son silence**. Un champ vide n'est pas un constat d'absence d'échec. C'est la
+   même famille d'erreur que l'errata 1 — une observation juste (le 200 *a bien* été reçu), une
+   conclusion tirée trop vite sur ce qu'elle signifie.
+
 ---
 
 ## 9. Sources
 
-**Mesures** — `probes/vm_survey.sh` (01/08) · `probes/webgpu_probe.mjs`, `probes/vram_probe.mjs`
-(25-26/07) · relevés de cycle de vie des 26-27/07, repris de
+**Mesures** — `probes/vm_survey.sh` (01/08, rejouée le 02/08) · `probes/tunnel_probe.sh` (02/08,
+`--full` pour lancer réellement les deux clients) · `probes/webgpu_probe.mjs`,
+`probes/vram_probe.mjs` (25-26/07) · relevés de cycle de vie des 26-27/07, repris de
 `PXL-Tape/v3/tests/investigations/note_vm_lifecycle.md`.
 
 **Documentation** — [Claude Code on the web](https://code.claude.com/docs/en/claude-code-on-the-web)

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Dépôt d'exploration, pas de base de code.** Ni build system, ni application, ni tests. Le
 sujet est **la VM Claude Code elle-même** : ce qu'elle est, ce qu'elle sait faire, ce qu'elle
-refuse. Le livrable est le relevé — [`DOSSIER_VM.md`](DOSSIER_VM.md) — et les trois sondes de
+refuse. Le livrable est le relevé — [`DOSSIER_VM.md`](DOSSIER_VM.md) — et les quatre sondes de
 `probes/` qui le rejouent.
 
 Particularité : **ce dépôt décrit l'environnement dans lequel tu tournes peut-être.** Si la
@@ -34,7 +34,7 @@ rien. Corollaire : ne jamais citer un chiffre d'ici comme la vérité de la sess
 relancer la sonde.
 
 **La section « Errata » (§8) ne se nettoie pas.** Elle consigne des inférences fausses avec leur
-mécanisme ; trois des cinq entrées corrigent une conclusion tirée trop vite d'une observation
+mécanisme ; quatre des six entrées corrigent une conclusion tirée trop vite d'une observation
 juste. Ce sont exactement les raisonnements qui seront refaits. Une erreur corrigée **s'y
 ajoute**.
 
@@ -55,7 +55,13 @@ Détaillé dans `DOSSIER_VM.md` §4 et §7 — les pièges qui coûtent le plus 
   `nohup`/détaché — le recyclage le tue en vol.
 - **Devant un 403/407/échec TLS inexpliqué** : `curl "$HTTPS_PROXY/__agentproxy/status"` avant
   de suspecter son propre code. Ne jamais désactiver la vérification TLS ni retirer
-  `HTTPS_PROXY` pour contourner.
+  `HTTPS_PROXY` pour contourner. ⚠️ Son `recentRelayFailures` a un angle mort — il est resté
+  vide sur des connexions pendues (§3 bis, errata 6). Champ vide ≠ pas d'échec.
+- **Tunnels sortants** : l'egress est restreint à **TCP/80, TCP/443, UDP/53** (mesuré 02/08,
+  `probes/tunnel_probe.sh`). Tailscale passe **en relais DERP seulement** (`--auth-key`,
+  l'auth interactive est hors d'atteinte) ; Cloudflare Tunnel **ne passe pas** (port 7844). Tout
+  client dont le plan de données ne sait pas se replier sur TCP/443 est mort — ne pas le tester.
+  Attention : les deux rendent un **plan de contrôle qui réussit** avant d'échouer.
 - **Chromium** : contexte sécurisé obligatoire (`http://127.0.0.1:<port>`, pas `about:blank`),
   et Chromium hérite de `HTTPS_PROXY` ⇒ `proxy: {server: 'direct://'}`. Binaire stable :
   `/opt/pw-browsers/chromium` (lien symbolique — ne pas versionner la révision). Ne pas lancer

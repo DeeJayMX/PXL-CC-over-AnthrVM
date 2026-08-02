@@ -30,6 +30,7 @@ dont le diff contre `main` *est* le futur dépôt — a servi ici, et c'est auss
 |---|---|
 | [`DOSSIER_VM.md`](DOSSIER_VM.md) | **Le dossier.** Machine, cycle de vie, réseau/proxy, GitHub, outillage, navigateur, errata. Point d'entrée. |
 | [`probes/vm_survey.sh`](probes/vm_survey.sh) | **À lancer en début de session.** Relevé d'état + canari de survie du workdir. |
+| [`probes/tunnel_probe.sh`](probes/tunnel_probe.sh) | ports ouverts en sortie, UDP, et le verdict Tailscale / Cloudflare Tunnel (`--full` lance les deux clients) |
 | [`probes/webgpu_probe.mjs`](probes/webgpu_probe.mjs) | WebGPU (adapter, compute WGSL, textures) + inventaire WebCodecs |
 | [`probes/vram_probe.mjs`](probes/vram_probe.mjs) | limites d'allocation, ring NV12 1080p par paliers jusqu'à OOM |
 
@@ -53,6 +54,13 @@ justifie *a posteriori* la méthodologie du banc JPEG-XS de `PXL-StageBox`.
 périmètre de la session et **réécrit les réponses de l'API GitHub** hors périmètre. Il expose son
 propre diagnostic : `curl "$HTTPS_PROXY/__agentproxy/status"`.
 
+**Un tunnel sortant passe si et seulement s'il sait parler par TCP/443 seul** (02/08). L'egress
+est restreint à **TCP/80, TCP/443 et UDP/53** : **Tailscale passe**, mais en relais DERP
+uniquement (jamais en pair-à-pair, l'UDP est filtré) ; **Cloudflare Tunnel non**, son plan de
+données est cloué sur le port 7844 sans repli. Les deux rendent pourtant un plan de contrôle
+verdoyant avant d'échouer — c'est le piège. ⚠️ La politique réseau est un réglage
+d'**environnement**, pas une propriété de la VM : elle a déjà divergé entre le 01/08 et le 02/08.
+
 **Deux choses sont définitivement hors d'atteinte** : créer un dépôt, et supprimer une branche
 (403 sur le `receive-pack`). Contournement pour la seconde : pousser un commit qui vide la
 branche.
@@ -65,7 +73,7 @@ branche.
 Tout est mesuré depuis l'intérieur, sondes à l'appui — sauf trois points marqués comme tels dans
 le dossier : la **localisation** de la VM (AWS supposé, non confirmé), la **durée de recyclage**
 côté doc officielle, et les **deux couches** du refus GitHub (une seule des deux est directement
-observée). Le dossier tient une section **Errata** : quatre entrées, dont trois sont des
+observée). Le dossier tient une section **Errata** : six entrées, dont quatre sont des
 inférences fausses corrigées à la mesure.
 
 **Une VM n'est pas l'autre** : relancer `vm_survey.sh` plutôt que citer un chiffre d'ici.
