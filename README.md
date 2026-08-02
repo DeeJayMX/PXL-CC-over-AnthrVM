@@ -88,9 +88,10 @@ capture**. Une console web dont le matériel est ailleurs se valide entièrement
 Tout est mesuré depuis l'intérieur, sondes à l'appui — sauf trois points marqués comme tels dans
 le dossier : la **localisation** de la VM (AWS supposé, non confirmé), la **durée de recyclage**
 côté doc officielle, et les **deux couches** du refus GitHub (une seule des deux est directement
-observée). Le dossier tient une section **Errata** : **huit entrées**, dont six sont des
-inférences ou des prescriptions fausses corrigées à la mesure — trois ajoutées le 02/08, dont
-une qui invalide la prémisse même de ce dépôt.
+observée). Le dossier tient une section **Errata** : **neuf entrées**, dont sept sont des
+inférences ou des prescriptions fausses corrigées à la mesure — quatre ajoutées le 02/08, dont
+une qui invalide la prémisse même de ce dépôt et une qui refait, six jours plus tard, l'erreur
+de raisonnement de la toute première.
 
 Reste explicitement **non mesuré** : si autoriser un hôte dans les réglages d'egress ouvre aussi
 ses **ports non standard**. C'est ce qui déciderait du sort de Cloudflare Tunnel.

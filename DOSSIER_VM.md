@@ -243,9 +243,12 @@ Il n'y a **pas de `gh` CLI**. Deux chemins seulement, et **ils n'ont pas les mê
 **Périmètre — le second verrou, et il enferme.** La session est liée à une liste de dépôts
 fixée **au démarrage de la VM**.
 
-> 🔴 **Un dépôt ne peut pas être attaché à une session déjà lancée** (rapporté par Eliott le
+> 🔴 ~~**Un dépôt ne peut pas être attaché à une session déjà lancée**~~ (rapporté par Eliott le
 > 01/08 ; non vérifié de l'intérieur, `add_repo` n'ayant pas été appelé). L'outil `add_repo`
-> existe et sa description annonce l'inverse — **ne pas s'y fier**.
+> existe et sa description annonce l'inverse — **et c'est la description qui avait raison** :
+> mesuré le 02/08, `add_repo` attache bel et bien un dépôt en cours de session (errata 6). Le
+> paragraphe qui suit décrit donc un verrou **qui n'existe plus** ; il est conservé parce qu'il
+> explique la naissance de ce dossier.
 >
 > **Conséquence, et c'est le piège** : les deux verrous se referment l'un sur l'autre. On ne peut
 > pas créer un dépôt depuis la session ; et le dépôt créé à la main pendant la session **reste
@@ -260,6 +263,44 @@ fixée **au démarrage de la VM**.
 **Contournement praticable quand la suppression de branche est refusée** : pousser un commit qui
 vide la branche de son contenu. L'arbre redevient identique à `main`, l'historique reste. C'est
 ce qui a été fait sur `pxl-airlink` le 01/08.
+
+### ⭐ Un clone `add_repo` fait croire que le push a échoué
+
+Mesuré le 02/08, et **ça mordra à chaque dépôt attaché en cours de session**. `add_repo` prescrit
+`git clone --depth 1`, qui implique `--single-branch` et écrit un refspec **étroit** :
+
+```
+remote.origin.fetch = +refs/heads/main:refs/remotes/origin/main
+```
+
+Seule `main` est mappée dans `refs/remotes/origin/`. Conséquence sur toute autre branche :
+
+| Commande | Ce qu'elle fait |
+|---|---|
+| `git push -u origin <branche>` | **pousse pour de vrai**, et écrit `branch.<b>.remote/.merge`… |
+| | …mais **ne crée pas** `refs/remotes/origin/<branche>` : le refspec ne la couvre pas |
+| `git log origin/<branche>` | ❌ `unknown revision` — **on croit que rien n'est parti** |
+| `git fetch origin <branche>` | n'écrit que `FETCH_HEAD`, toujours pas la ref de suivi |
+
+**La vérité est côté serveur**, et une seule commande la donne :
+
+```bash
+git ls-remote origin refs/heads/<branche>     # le SHA que le serveur a vraiment
+```
+
+**Le remède**, une fois par clone :
+
+```bash
+git fetch origin '+refs/heads/*:refs/remotes/origin/*'
+```
+
+> ⚠️ **Le faux coupable.** Le remote de ce dépôt répond aussi
+> `This repository moved. Please use the new location: …` (renommage/casse), message qui apparaît
+> **dans la sortie du même push**. Il est **sans rapport** : le push suit la redirection et
+> réussit. Blâmer ce message était tentant — et faux (errata 9).
+>
+> ⇒ **Ne jamais conclure « le push a échoué » depuis un `git log origin/…` ou un `git branch -r`
+> sur un clone superficiel.** Vérifier avec `git ls-remote`.
 
 ---
 
@@ -436,6 +477,15 @@ peut **jouer l'opérateur et relire ce que le serveur a vu**.
    reçoit un certificat **émis par Anthropic**. `no_proxy` décrit un *itinéraire* (pas de
    `CONNECT`), pas une *exemption de politique*. **Leçon : « ça répond 200 » ne prouve pas
    « ça sort en clair ».**
+
+9. ❌ **« La ref de suivi manquante vient de la redirection du dépôt. »** (02/08, annoncé à
+   Eliott *avant* de mesurer.) Faux : elle vient du `git clone --depth 1` prescrit par
+   `add_repo`, qui écrit un refspec limité à `main`. Le message `This repository moved` était
+   simplement **dans la même sortie de commande** que le symptôme — une coïncidence promue au
+   rang de cause. **Leçon : c'est exactement l'erreur de l'errata 1, refaite six jours plus
+   tard sur un autre sujet — deux faits qui apparaissent ensemble à l'écran ne sont pas pour
+   autant liés.** Le diagnostic a tenu trente secondes devant `git config --get-all
+   remote.origin.fetch` ; il aurait fallu le taper avant de parler. Voir §4.
 
 ---
 
