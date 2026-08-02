@@ -329,6 +329,13 @@ ce qui a été fait sur `pxl-airlink` le 01/08.
    sur `about:blank` et `data:`. Servir la page sur `http://127.0.0.1:<port>`.
 2. 🔴 **Chromium hérite de `HTTPS_PROXY`** et route `127.0.0.1` à travers ⇒ `goto` pendu.
    Lancer avec `proxy: {server: 'direct://'}` (Playwright) ou `--no-proxy-server`.
+
+   > ⚠️ **Divergence mesurée le 02/08** (Chromium 141.0.7390.37 + `playwright-core` 1.62.1) :
+   > **`proxy: {server: 'direct://'}` ne marche plus** — `net::ERR_PROXY_CONNECTION_FAILED`.
+   > `proxy: {server:…, bypass:'<-loopback>'}` échoue pareil. **Seul `args: ['--no-proxy-server']`
+   > joint le loopback** (le `ERR_INVALID_AUTH_CREDENTIALS` obtenu au banc d'essai est un 401
+   > applicatif : la connexion, elle, a abouti). Les deux recettes du 25/07 étaient données comme
+   > équivalentes ; elles ne le sont plus. **⇒ Utiliser `--no-proxy-server`.**
 3. **Flags WebGPU logiciel** : `--enable-unsafe-webgpu --enable-features=Vulkan
    --use-webgpu-adapter=swiftshader --no-sandbox`.
 4. `--force-gpu-mem-available-mb` **ne plafonne pas** les allocations WebGPU (testé à 512 Mo :
