@@ -6,23 +6,23 @@
 > **Statut : dossier d'exploration.** Ni build system, ni application. Le livrable est le
 > relevé et les sondes qui le rejouent.
 
-## 📦 Ce dossier est en attente de son dépôt
+## Origine — et pourquoi le détour
 
-Il est écrit pour être **soulevé tel quel** vers `DeeJayMX/PXL-CC-over-AnthrVM`, et vit en
-attendant sur la branche **`claude/cc-over-anthrvm` de `DeeJayMX/PXL-Tape`** — c'est là que sont
-nées les notes d'origine. La branche part de `main` et **n'ajoute que ce dossier** : son diff
-contre `main` *est* le futur dépôt. Elle n'a pas vocation à être fusionnée.
+Ce dossier est né sur la branche `claude/cc-over-anthrvm` de `DeeJayMX/PXL-Tape` — là où sont
+nées les notes d'origine — et a été extrait ici le 02/08/2026, **depuis un poste local**.
 
-**Deux verrous, tous deux mesurés dans ce dossier** ([`DOSSIER_VM.md`](DOSSIER_VM.md) §4) :
+Ce détour n'est pas un caprice d'organisation : c'est la conséquence directe de deux verrous
+mesurés dans ce dossier ([`DOSSIER_VM.md`](DOSSIER_VM.md) §4), qui se referment l'un sur l'autre.
 
-1. **créer un dépôt est impossible depuis la session** — `POST /user/repos` prend un **403** ;
-2. **attacher un dépôt à une session déjà lancée est impossible aussi** — le périmètre GitHub
-   est figé au démarrage de la VM. Un dépôt créé en cours de route reste hors d'atteinte
-   **jusqu'à la session suivante**.
+1. **Créer un dépôt est impossible depuis la session** — `POST /user/repos` prend un **403**.
+2. **Attacher un dépôt à une session déjà lancée l'est aussi** — le périmètre GitHub est figé au
+   démarrage de la VM ; un dépôt créé en cours de route reste hors d'atteinte jusqu'à la session
+   suivante.
 
-⇒ L'extraction se fera donc **depuis une nouvelle session**, ouverte une fois le dépôt créé :
-copier `cc-over-anthrvm/*` à la racine, supprimer cette note. Cette branche est à supprimer
-ensuite.
+⇒ **Aucune séquence ne part de rien et n'aboutit à du contenu poussé dans un dépôt neuf en une
+seule session cloud.** Le contournement — écrire sur une branche dédiée d'un dépôt déjà attaché,
+dont le diff contre `main` *est* le futur dépôt — a servi ici, et c'est aussi l'histoire de
+`PXL-StageBox`, né sur une branche de `pxl-airlink`.
 
 ## Contenu
 

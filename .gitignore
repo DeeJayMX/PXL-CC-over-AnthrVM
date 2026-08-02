@@ -1,0 +1,20 @@
+# --- OS / OneDrive ---
+Thumbs.db
+Desktop.ini
+desktop.ini
+.DS_Store
+~$*
+
+# --- Claude Code (config locale, non partagée) ---
+.claude/settings.local.json
+
+# --- Sorties de sondes ---
+node_modules/
+*.log
+probe_out/
+
+# --- Secrets ---
+.env
+.env.*
+*.key
+*.pem
