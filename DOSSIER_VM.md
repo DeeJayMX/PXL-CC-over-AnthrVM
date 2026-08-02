@@ -170,13 +170,37 @@ Host not in allowlist: api.trycloudflare.com.
 Add this host to your network egress settings to allow access.
 ```
 
-> ⇒ **C'est une question de politique réseau de l'environnement, pas d'outillage.** La piste, si
-> le besoin revient, est dans les réglages d'egress de l'environnement (voir la doc « Claude Code
-> on the web »), pas dans un contournement.
->
-> ⚠️ **Non mesuré, et décisif** : autoriser un hôte ouvre-t-il aussi ses **ports non standard** ?
-> Si l'allowlist ne porte que sur 80/443, cloudflared resterait bloqué même autorisé, et
-> Tailscale ne pourrait fonctionner qu'en DERP. Aucune mesure ici ne tranche — ne pas l'inférer.
+> ⇒ **C'est une question de politique réseau de l'environnement, pas d'outillage** — et le
+> `/root/.ccr/README.md` est formel : « *Do not retry or route around it — report the blocked
+> host.* » Un 403 se **rapporte**, il ne se contourne pas.
+
+#### Le levier, et où il se trouve
+
+**Aucun outil de session ne modifie l'allowlist** — recherché le 02/08 dans tout l'outillage
+disponible, y compris du côté qui a livré `add_repo` : rien. Le réglage est **hors de la VM**,
+dans la configuration de l'environnement, à la main de l'utilisateur.
+
+Source : doc [Configure cloud environments](https://code.claude.com/docs/en/cloud-environments)
+(**documentation, pas mesure**). Le champ **Network access** d'un environnement prend quatre
+valeurs :
+
+| Niveau | Sorties autorisées |
+|---|---|
+| **None** | aucune |
+| **Trusted** *(défaut)* | la liste d'allowlist par défaut : registres de paquets, GitHub, SDK cloud |
+| **Full** | **n'importe quel domaine** |
+| **Custom** | votre propre liste (`api.example.com`, `*.internal.example.com`), avec ou sans les défauts |
+
+Où : l'icône nuage **au-dessus de la zone de message** sur `claude.ai/code` → *Add cloud
+environment*, ou l'engrenage d'un environnement existant. Pas de page de réglages dédiée.
+⚠️ Changer les hôtes autorisés **invalide le cache d'environnement** : le script de setup
+rejoue au prochain démarrage.
+
+> ⚠️ **Non mesuré, et décisif** : la doc parle de **domaines**, jamais de **ports**. Or ici seuls
+> 80 et 443 sortent. Passer en **Full** lèverait les 403 — mais si le filtrage de ports tient
+> quand même, **cloudflared resterait mort** (7844, sans repli 443) tandis que **Tailscale
+> aurait une chance en DERP** (plan de contrôle et DERP sont en HTTPS/443). Prédiction, pas
+> mesure : à trancher en rejouant `probes/tunnel_probe.py` dans un environnement **Full**.
 
 C'est ce qui donne sa valeur au **pilotage d'interface en local** (§6) : on ne peut pas montrer
 l'UI en direct à un humain, mais on peut la **servir, la manipuler et la regarder** sur place.

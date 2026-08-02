@@ -74,7 +74,7 @@ proxy **n'est pas contournable en ouvrant une socket** : le TLS est intercepté 
 certificat `O=Anthropic, CN=Egress Gateway SDS Issuing CA`, y compris sur les hôtes de
 `no_proxy`. ⇒ **Aucun tunnel n'expose un serveur de la VM** : `cloudflared` (hôte de réservation
 en 403 *et* port 7844 muré) ni Tailscale (plan de contrôle, DERP et paquets en 403, pas d'UDP).
-C'est un réglage d'**egress de l'environnement**, pas un problème d'outil.
+C'est un réglage d'**egress de l'environnement** (champ **Network access** : None / Trusted / Full / Custom, sur `claude.ai/code`), pas un problème d'outil — et aucun outil de session ne le modifie.
 
 **En échange, on peut piloter une UI et la regarder.** Servir une page en local, la manipuler au
 pointeur et au clavier, vérifier ce que le serveur a reçu, capturer le rendu — et **relire la
