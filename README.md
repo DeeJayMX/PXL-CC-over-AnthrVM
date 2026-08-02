@@ -15,14 +15,16 @@ Ce détour n'est pas un caprice d'organisation : c'est la conséquence directe d
 mesurés dans ce dossier ([`DOSSIER_VM.md`](DOSSIER_VM.md) §4), qui se referment l'un sur l'autre.
 
 1. **Créer un dépôt est impossible depuis la session** — `POST /user/repos` prend un **403**.
-2. **Attacher un dépôt à une session déjà lancée l'est aussi** — le périmètre GitHub est figé au
-   démarrage de la VM ; un dépôt créé en cours de route reste hors d'atteinte jusqu'à la session
-   suivante.
+2. ~~**Attacher un dépôt à une session déjà lancée l'est aussi**~~ — **infirmé le 02/08**
+   (§4 bis, errata 7) : `add_repo` attache bel et bien un dépôt en cours de session. Le verrou
+   n'a jamais été mesuré, seulement rapporté, et il a été cru.
 
-⇒ **Aucune séquence ne part de rien et n'aboutit à du contenu poussé dans un dépôt neuf en une
-seule session cloud.** Le contournement — écrire sur une branche dédiée d'un dépôt déjà attaché,
-dont le diff contre `main` *est* le futur dépôt — a servi ici, et c'est aussi l'histoire de
-`PXL-StageBox`, né sur une branche de `pxl-airlink`.
+⇒ Le premier verrou tient : **aucune séquence ne part de rien et n'aboutit à du contenu poussé
+dans un dépôt neuf en une seule session cloud** — mais c'est désormais la *création* seule qui
+l'interdit, pas l'attachement. Un dépôt créé à la main pendant la session est attachable tout de
+suite. Le contournement — écrire sur une branche dédiée d'un dépôt déjà attaché, dont le diff
+contre `main` *est* le futur dépôt — a servi ici, et c'est aussi l'histoire de `PXL-StageBox`,
+né sur une branche de `pxl-airlink`.
 
 ## Contenu
 

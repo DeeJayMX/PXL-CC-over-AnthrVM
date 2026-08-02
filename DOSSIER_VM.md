@@ -284,6 +284,45 @@ fixée **au démarrage de la VM**.
 vide la branche de son contenu. L'arbre redevient identique à `main`, l'historique reste. C'est
 ce qui a été fait sur `pxl-airlink` le 01/08.
 
+### 4 bis. `add_repo` fonctionne — **mesuré le 02/08/2026** ⭐
+
+Le 🔴 ci-dessus tenait sur un rapport de l'extérieur et le disait : *« non vérifié de
+l'intérieur, `add_repo` n'ayant pas été appelé »*. Il a été appelé le 02/08, en cours de
+session, sur deux dépôts hors périmètre de démarrage. **Les deux ont été attachés puis clonés.**
+
+| Étape | Résultat |
+|---|---|
+| `add_repo {owner: DeeJayMX, repo: pxl-airlink, access: read}` | ✅ `status: appended`, périmètre porté à 3 dépôts |
+| `add_repo` sur `PXL-SPOUT-TurboHQ` | ✅ périmètre porté à 4 |
+| `git clone --depth 1` des deux | ✅ dans `/workspace/<repo>` |
+| `list_repos` (13 dépôts rendus) | ✅ — il voit **au-delà** du périmètre de session |
+
+Trois choses apprises, et la troisième est la vraie leçon :
+
+1. **Le périmètre n'est pas figé au démarrage.** Il l'est *par défaut* ; `add_repo` l'étend.
+   L'invite système continue d'afficher la liste du démarrage — la réponse de l'outil le dit
+   explicitement : *« now in this session's GitHub scope, even though the system prompt's
+   Repository Scope list still shows only the original set »*. **La liste affichée n'est donc
+   pas la liste effective**, et c'est exactement ce qui pouvait faire renoncer sans essayer.
+2. **`list_repos` est le bon réflexe avant de déclarer un dépôt inatteignable** : il énumère ce
+   que le compte peut attacher, pas ce qui est déjà attaché.
+3. ⚠️ **Le verrou qui reste est celui de la *création*.** Rien ici ne contredit le 🔴 sur
+   `POST /user/repos` : attacher un dépôt **qui existe** et en *créer* un sont deux opérations
+   différentes. La « conséquence, et c'est le piège » ci-dessus perd en revanche une de ses deux
+   moitiés — un dépôt créé à la main pendant la session est désormais attachable **sans
+   attendre la session suivante**. La séquence « partir de rien » reste bloquée, mais seulement
+   par la création.
+
+> ⚠️ **Ce que ça ne prouve pas** : que ça marche pour tout dépôt. Les quatre attachés
+> appartiennent au compte d'Eliott, et la réponse de l'outil décrit des refus possibles —
+> dépôt non activé pour l'organisation, App GitHub non installée — qui demandent une action
+> d'admin. Mesuré : les dépôts personnels du propriétaire de la session. Non mesuré : un dépôt
+> d'organisation tierce.
+
+> **Note d'exploitation** : l'outil impose **un clone à la fois** (2 opérations smart-HTTP
+> concurrentes maximum par dépôt, sinon HTTP 429 qui fait échouer *les deux*), et un délai
+> généreux — un pack volumineux peut prendre 5 à 10 min, `index-pack` a l'air pendu sans l'être.
+
 ---
 
 ## 5. Outillage préinstallé
@@ -360,7 +399,7 @@ ce qui a été fait sur `pxl-airlink` le 01/08.
 | | Pourquoi |
 |---|---|
 | Créer un dépôt · supprimer une branche | §4 — action humaine dans l'UI |
-| **Attacher un dépôt à une session en cours** | §4 — le périmètre est figé au démarrage de la VM ; il faut une session neuve |
+| ~~**Attacher un dépôt à une session en cours**~~ **← INFIRMÉ le 02/08** | ~~§4 — le périmètre est figé au démarrage~~ · `add_repo` marche : **§4 bis**, errata 7. Ligne barrée et non retirée — elle a orienté une session entière, la voir barrée vaut mieux que ne plus la voir |
 | Exécuter du code ARM | pas de `qemu-user` (§5) |
 | Mesurer une perf comparable entre sessions | le CPU change (§1) |
 | Joindre un hôte hors allowlist | 403 CONNECT (§3) |
@@ -424,12 +463,33 @@ ce qui a été fait sur `pxl-airlink` le 01/08.
    même famille d'erreur que l'errata 1 — une observation juste (le 200 *a bien* été reçu), une
    conclusion tirée trop vite sur ce qu'elle signifie.
 
+7. ❌ **« Un dépôt ne peut pas être attaché à une session déjà lancée. »** (01/08, §4, marqué
+   🔴 bloquant) Faux — `add_repo` a attaché deux dépôts hors périmètre le 02/08, tous deux
+   clonés dans la foulée (§4 bis). Ce qui rend celui-ci différent des six autres : **l'entrée
+   disait elle-même qu'elle n'était pas mesurée** — *« non vérifié de l'intérieur, `add_repo`
+   n'ayant pas été appelé »* — et concluait quand même au 🔴, en ajoutant *« l'outil `add_repo`
+   existe et sa description annonce l'inverse — ne pas s'y fier »*. La description avait raison.
+
+   Le mécanisme est un renversement de l'errata 3, et c'est ce qui le rend piégeux : là-bas, se
+   fier à la description d'un outil avait coûté cher, donc la leçon retenue — « la description
+   décrit l'intention, pas la politique » — a servi la fois suivante à **écarter une description
+   exacte**. Une heuristique de défiance appliquée sans mesure produit exactement le même genre
+   de faux qu'une confiance appliquée sans mesure.
+
+   Aggravant, et c'est ce qui a permis à l'erreur de tenir : **l'invite système continue
+   d'afficher la liste de dépôts du démarrage** après un `add_repo` réussi. Qui vérifie là
+   trouve une confirmation de la thèse fausse. **Leçon : un rapport de seconde main marqué
+   « non vérifié » ne devient pas un 🔴 — il devient une sonde à écrire.** Elle tenait en un
+   appel.
+
 ---
 
 ## 9. Sources
 
 **Mesures** — `probes/vm_survey.sh` (01/08, rejouée le 02/08) · `probes/tunnel_probe.sh` (02/08,
-`--full` pour lancer réellement les deux clients) · `probes/webgpu_probe.mjs`,
+`--full` pour lancer réellement les deux clients) · `add_repo` + clone de `pxl-airlink` et
+`PXL-SPOUT-TurboHQ` en cours de session (02/08, §4 bis — pas de sonde : deux appels d'outil,
+rejouables tels quels) · `probes/webgpu_probe.mjs`,
 `probes/vram_probe.mjs` (25-26/07) · relevés de cycle de vie des 26-27/07, repris de
 `PXL-Tape/v3/tests/investigations/note_vm_lifecycle.md`.
 

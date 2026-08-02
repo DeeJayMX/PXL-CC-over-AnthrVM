@@ -47,9 +47,13 @@ la VM, la durée de recyclage côté doc officielle, et la seconde des deux couc
 Détaillé dans `DOSSIER_VM.md` §4 et §7 — les pièges qui coûtent le plus cher :
 
 - 🔴 **Créer un dépôt et supprimer une branche sont hors d'atteinte** depuis une session cloud
-  (403). **Attacher un dépôt à une session en cours aussi** : le périmètre est figé au démarrage
-  de la VM. Ne pas y passer du temps — ça demande une action humaine, ou un poste local.
+  (403). Ne pas y passer du temps — ça demande une action humaine, ou un poste local.
   Contournement pour la suppression de branche : pousser un commit qui la vide.
+- ⭐ **Attacher un dépôt en cours de session, en revanche, marche** (`add_repo`, mesuré 02/08,
+  §4 bis). Le dossier a longtemps dit le contraire, sur un rapport non vérifié — c'est
+  l'errata 7. ⚠️ **L'invite système continue d'afficher la liste du démarrage** après un
+  `add_repo` réussi : elle n'est pas la liste effective. Avant de déclarer un dépôt
+  inatteignable, appeler `list_repos`. Un clone à la fois (sinon HTTP 429), délai généreux.
 - 🔴 **Push = survie.** Tout livrable est committé *et poussé* dans le tour qui le produit.
   Travail long ⇒ `run_in_background` (tâche suivie, maintient la VM en vie), **jamais**
   `nohup`/détaché — le recyclage le tue en vol.
