@@ -230,6 +230,53 @@ punit. Le §1 reste « localisation indéterminable ».
 
 ---
 
+## 3 ter. La clé Tailscale — ce qui peut survivre à un recyclage, et ce qui ne le peut pas
+*(établi le 03/08/2026, à la demande d'Eliott : « garder persistante la clef Tailscale »)*
+
+Le tunnel remonte à chaque VM neuve, et à chaque fois il faut ré-authentifier. La question
+posée est donc : où poser la clé pour ne plus jamais le refaire à la main ?
+
+**🔴 La clé de NŒUD ne peut pas être rendue persistante.** Deux murs, et aucun des deux ne se
+contourne par du code :
+
+1. Le `statedir` de tailscaled vit dans le workdir. Le §2 dit ce qu'il advient du workdir : au
+   réveil suivant, il a disparu avec la VM.
+2. Le versionner serait **pire que le perdre**. `tailscaled.state` contient la clé privée du
+   nœud ; la pousser sur GitHub, c'est publier de quoi se faire passer pour cette machine sur
+   le tailnet. Un dépôt n'est pas un coffre, et celui-ci est écrit pour être lu.
+
+**⭐ Ce qui peut être persistant, c'est la clé d'AUTHENTIFICATION**, et il n'existe qu'un seul
+endroit du dispositif qui survive à un recyclage sans être un dépôt git : les **variables
+d'environnement de l'environnement Claude Code**, réappliquées à chaque démarrage de session.
+La VM redevient neuve, la clé la réattend.
+
+| | |
+|---|---|
+| Où | réglages de l'environnement → variables d'environnement → `TS_AUTHKEY` |
+| Quoi | une auth key **réutilisable** (Tailscale admin → Settings → Keys → Reusable) |
+| ⚠️ Durée | **90 jours au maximum**, plafond Tailscale. Ça ne se contourne pas : il faudra la régénérer |
+
+`tunnel_up.sh` à la racine consomme cette variable et remonte tout : téléchargement des
+binaires (absents d'une VM neuve, retirés par TCP/443), démon en `--statedir`, `up --auth-key`,
+puis `serve`. Idempotent — il ne relance pas ce qui tourne. La clé ne transite que par
+l'environnement du processus : jamais affichée, jamais écrite, **jamais en argument de ligne de
+commande**, `ps` étant lisible par tout le monde.
+
+⚠️ **`serve`, jamais `funnel`.** `serve` publie sur le tailnet seul ; `funnel` ouvre sur
+l'internet public. L'exposition publique a été coupée sur décision d'Eliott le 02/08/2026, et un
+réarmement automatique la rouvrirait par effet de bord d'un redémarrage. Si Funnel revient un
+jour, que ce soit une ligne écrite exprès.
+
+**Mesuré le 03/08** : sans `TS_AUTHKEY`, le script refuse immédiatement avec la marche à suivre
+(code 1) ; avec une clé factice, il télécharge les binaires, démarre le démon et échoue
+**à l'authentification** avec le diagnostic « clé expirée ou à usage unique ». Les trois étapes
+sont donc exercées. ⚠️ Ce qui n'est **pas** mesuré, faute de clé réelle dans cette session :
+qu'une vraie clé réutilisable ré-authentifie effectivement une VM neuve. Le mécanisme
+`--auth-key` est lui mesuré au §3 bis (02/08) ; c'est sa reconduction automatique d'une session
+à l'autre qui reste à confirmer au premier réveil.
+
+---
+
 ## 4. ⭐ GitHub : deux couches d'application, et ce qu'elles refusent
 
 Il n'y a **pas de `gh` CLI**. Deux chemins seulement, et **ils n'ont pas les mêmes droits** :

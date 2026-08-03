@@ -18,3 +18,8 @@ probe_out/
 .env.*
 *.key
 *.pem
+# 🔴 L'état de tailscaled porte la CLÉ PRIVÉE DU NŒUD. Le versionner publierait
+# de quoi se faire passer pour cette machine sur le tailnet. Il n'a pas à être
+# rendu persistant ici : c'est TS_AUTHKEY, dans l'environnement, qui survit —
+# voir tunnel_up.sh.
+.tailscale/

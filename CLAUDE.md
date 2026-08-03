@@ -66,6 +66,10 @@ Détaillé dans `DOSSIER_VM.md` §4 et §7 — les pièges qui coûtent le plus 
   l'auth interactive est hors d'atteinte) ; Cloudflare Tunnel **ne passe pas** (port 7844). Tout
   client dont le plan de données ne sait pas se replier sur TCP/443 est mort — ne pas le tester.
   Attention : les deux rendent un **plan de contrôle qui réussit** avant d'échouer.
+- **Remonter le tunnel dans une VM neuve** : `bash tunnel_up.sh [port]` (§3 ter). 🔴 La clé de
+  nœud n'est pas persistable — le workdir disparaît, et la versionner publierait un secret.
+  C'est `TS_AUTHKEY`, dans les variables d'environnement de l'environnement Claude Code, qui
+  survit ; le script la consomme. ⚠️ `serve`, jamais `funnel`.
 - **Chromium** : contexte sécurisé obligatoire (`http://127.0.0.1:<port>`, pas `about:blank`),
   et Chromium hérite de `HTTPS_PROXY` ⇒ `proxy: {server: 'direct://'}`. Binaire stable :
   `/opt/pw-browsers/chromium` (lien symbolique — ne pas versionner la révision). Ne pas lancer
