@@ -136,6 +136,61 @@ else
   fi
 fi
 
+# ── 4 bis. 🔴 LE RELAIS HOME, et c'est LA correction qui a coûté une matinée.
+#
+# La VM est hébergée aux États-Unis : son `netcheck` ne sonde que des régions
+# américaines et elle choisit `nyc` comme relais home. Les pairs qui veulent la
+# joindre SANS SOLLICITATION envoient vers ce relais — et le trafic n'arrive
+# jamais. Le sens sortant, lui, marche : c'est nous qui ouvrons la connexion vers
+# la région du pair, et les réponses reviennent dessus.
+#
+# D'où une asymétrie qui ressemble à tout SAUF à sa cause : disco OK dans les
+# deux sens, `tailscale ping` du pair en timeout, SYN TCP jamais posé, et une
+# ACL parfaitement correcte qu'on accuse à tort pendant une heure.
+#
+# ⇒ On force le relais home sur la région où sont les pairs. Mesuré le 03/08 :
+#   home `nyc` → inatteignable ; home `par` (région du laptop) → tout passe,
+#   ACL stricte inchangée, sans aucun keepalive.
+#
+# ⚠️ `force-prefer-derp` est « until restart » : il ne survit pas à un
+# redémarrage de tailscaled, donc il est réappliqué ici à chaque passage.
+REGION=${TS_DERP_REGION:-}
+if [ -z "$REGION" ]; then
+  # Auto : la région la plus fréquente chez les pairs EN LIGNE. C'est là que se
+  # trouvent les gens qui veulent nous joindre.
+  REGION=$($TS status --json 2>/dev/null | node -e "
+    let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{
+      const j=JSON.parse(s);
+      const n={}; for(const p of Object.values(j.Peer||{}))
+        if(p.Online && p.Relay) n[p.Relay]=(n[p.Relay]||0)+1;
+      const top=Object.entries(n).sort((a,b)=>b[1]-a[1])[0];
+      console.log(top?top[0]:'');
+    }catch{console.log('')}});" 2>/dev/null)
+  [ -n "$REGION" ] && log "région la plus peuplée chez les pairs en ligne : $REGION"
+fi
+if [ -n "$REGION" ]; then
+  # `force-prefer-derp` veut un ID numérique ; les pairs donnent un CODE ("par").
+  ID=$($TS debug derp-map 2>/dev/null | node -e "
+    let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{
+      const j=JSON.parse(s), code=process.argv[1];
+      for(const [id,r] of Object.entries(j.Regions||{}))
+        if(r.RegionCode===code) return console.log(id);
+      console.log('');
+    }catch{console.log('')}});" "$REGION" 2>/dev/null)
+  if [ -n "$ID" ]; then
+    timeout 20 $TS debug force-prefer-derp "$ID" >> "$DIR/tailscaled.log" 2>&1
+    timeout 20 $TS debug break-derp-conns  >> "$DIR/tailscaled.log" 2>&1
+    sleep 10
+    log "relais home forcé sur $REGION (région $ID) — sinon l'entrant ne passe pas"
+  else
+    log "⚠️ région $REGION introuvable dans la DERP map, relais home laissé au défaut"
+  fi
+else
+  log "⚠️ aucun pair en ligne : relais home laissé au défaut. Si l'entrant ne"
+  log "   passe pas, relancer ce script une fois un pair connecté, ou forcer"
+  log "   la région à la main : TS_DERP_REGION=par bash tunnel_up.sh"
+fi
+
 # ── 5. La console sur le tailnet. `serve`, jamais `funnel` : voir l'en-tête.
 log "publication du port $PORT sur le tailnet (serve, pas funnel)"
 timeout 40 $TS serve --bg "$PORT" >> "$DIR/tailscaled.log" 2>&1 \

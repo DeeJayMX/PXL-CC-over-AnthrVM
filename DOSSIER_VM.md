@@ -413,6 +413,58 @@ persiste d'une session à l'autre, c'est `TS_AUTHKEY` et rien d'autre.
 `Self`. Lire une structure avec un outil qui ne la comprend pas marche jusqu'au jour où l'ordre
 des clés change. Il lit maintenant `.Self` avec un parseur JSON, et affiche le tag avec.
 
+### 🔴 Mesuré le 03/08 — pourquoi l'entrant ne passait pas, et ce que ce n'était PAS
+
+Une matinée entière, et la cause n'était aucune de celles qu'on soupçonnait. Elle mérite d'être
+écrite avec les fausses pistes, parce que ce sont elles qu'on refera.
+
+**Le symptôme, et sa forme trompeuse.** Depuis un poste du tailnet : `tailscale ping` en timeout,
+SYN TCP jamais posé, HTTPS injoignable. Depuis la VM : tout marche. On peut pinguer les pairs et
+recevoir 120 pongs sur 120. **Disco bidirectionnel, TCP entrant nul.** Cette asymétrie ressemble
+à un pare-feu, à une ACL, à un certificat — à tout sauf à sa cause.
+
+**⭐ La cause : le RELAIS HOME.** La VM est hébergée aux États-Unis. Son `netcheck` ne sonde que
+des régions américaines (nyc 52 ms, iad, ord, den, mia, tor, dfw, sfo — aucune européenne) et
+elle choisit `nyc` comme relais home. Les pairs qui veulent la joindre **sans sollicitation**
+envoient vers ce relais. Rien n'arrive. Le sens sortant marche parce que c'est *nous* qui ouvrons
+une connexion vers la région du pair (`par`), et les réponses reviennent dessus.
+
+Correction mesurée : `tailscale debug force-prefer-derp <région du pair>` puis
+`break-derp-conns`. Avec home = `par`, **tout passe, ACL stricte inchangée, sans aucun
+keepalive**. ⚠️ `force-prefer-derp` est « until restart » — il est donc réappliqué à chaque
+passage de `tunnel_up.sh`, qui détecte tout seul la région la plus peuplée chez les pairs en
+ligne (surchargeable par `TS_DERP_REGION`).
+
+**❌ Ce que ce n'était PAS, et qui a coûté le plus de temps : l'ACL.** Elle a été soupçonnée deux
+fois et innocentée deux fois, la seconde de façon décisive :
+
+* pendant la panne, `tailscale debug netmap` montrait déjà la règle
+  `pxl-aero → 100.86.90.119:443` **présente et correcte** — le filtre autorisait, et ça ne
+  passait pas quand même ;
+* après correction du relais, la **policy stricte remise en place**, tout fonctionne.
+
+⚠️ Entre les deux, une coïncidence a failli faire conclure l'inverse : au moment précis où la
+policy stricte était restaurée, l'accès est retombé. Le journal, lui, disait autre chose —
+voir ci-dessous. **Sans le journal, l'ACL était condamnée sur un enchaînement temporel.**
+
+**🔴 Seconde cause, indépendante : le PORT DU PROXY DE SESSION n'est pas stable.**
+
+```
+dial tcp 127.0.0.1:43003: connect: connection refused
+```
+
+L'infrastructure de la session a redémarré (signe visible : les serveurs MCP se déconnectent puis
+se reconnectent), et **le proxy de sortie a changé de port** — `43003` → `41577`. Or `tailscaled`
+mémorise l'adresse du proxy à son démarrage : il perd sa sortie, puis meurt. La console avec.
+
+⇒ **Après tout redémarrage de l'infrastructure, relancer console PUIS `tunnel_up.sh`.** Ce n'est
+pas rattrapable dans le script tel quel : il faudrait surveiller `$HTTPS_PROXY` et redémarrer
+tailscaled quand il bouge. Noté comme travail restant.
+
+⚠️ Et pour l'enquête : `tailscale ping` du pair vers nous est **soumis à l'ACL** — la règle
+n'ouvrant que `:443`, un ping échoue même quand tout fonctionne. Diagnostiquer avec `ping`
+revient à utiliser un outil que la policy bloque, et son échec ne prouve rien.
+
 ### Le fichier de policy, et deux pièges de syntaxe
 
 La policy retenue est archivée en clair dans [`tailscale-policy.hujson`](tailscale-policy.hujson)
@@ -710,6 +762,31 @@ Trois choses apprises, et la troisième est la vraie leçon :
    Aggravant, du même genre que l'errata 7 : la recommandation a été écrite **au moment de
    conclure la session**, quand rien n'invitait plus à vérifier. C'est exactement là qu'une
    affirmation non mesurée passe.
+
+9. ❌ **« Le trafic entrant ne passe pas, donc c'est l'ACL. »** (03/08, soupçonnée deux fois,
+   fausse les deux fois.) L'ACL était le seul élément qu'on avait changé, donc le suspect
+   naturel — et le raisonnement s'est arrêté là au lieu d'aller lire ce que le nœud recevait
+   VRAIMENT. `tailscale debug netmap` montrait, **pendant la panne**, la règle
+   `pxl-aero → :443` présente et correcte.
+
+   Aggravant, et c'est ce qui rend l'entrée utile : au moment précis où la policy stricte a été
+   restaurée après un essai en allow-all, l'accès est retombé. Enchaînement temporel parfait,
+   conclusion évidente — et fausse : le journal montrait `connection refused` sur le port du
+   proxy de session, qui venait de changer. **Leçon : une coïncidence temporelle n'est pas une
+   causalité, et le journal la départage en dix secondes.** C'est le même mécanisme que
+   l'errata 1, où une opération avait été identifiée par son timing.
+
+10. ❌ **Trois lectures de mesure trop rapides dans la même heure**, toutes dans le même sens :
+   conclure depuis une observation partielle.
+   *(a)* « le `403` prouve que l'isolation marche » — c'était la passerelle de sortie de la VM
+   qui refusait une IP en plage réservée, la requête n'avait jamais atteint tailscaled.
+   *(b)* « `tailscale nc` vers notre propre IP prouve que l'entrant fonctionne » — une connexion
+   d'un nœud vers lui-même court-circuite le tailnet et le filtre ; ça ne prouvait que le
+   listener et le certificat.
+   *(c)* « `inbound_packets = 0` prouve que les paquets n'arrivent pas » — ce compteur ne compte
+   que le trafic IP tunnelisé, pas le disco ; il était à 0 pendant que 120 pongs arrivaient.
+   **Leçon : avant de conclure d'un compteur ou d'un code de retour, établir ce qu'il compte et
+   ce qu'il ne compte pas.** Un zéro n'est une absence que si on sait ce qu'il mesure.
 
 ---
 

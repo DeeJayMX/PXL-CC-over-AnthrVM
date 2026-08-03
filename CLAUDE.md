@@ -79,6 +79,16 @@ Détaillé dans `DOSSIER_VM.md` §4 et §7 — les pièges qui coûtent le plus 
   **persiste entre les invocations** — `uptime` mesuré deux fois le prouve. Et 🔴 **l'ACL d'un
   nœud ne se teste pas depuis ce nœud** : proxy → 502, `--accept-dns=false` → pas de MagicDNS.
   Un échec là n'est pas un refus d'ACL. Policy de référence : `tailscale-policy.hujson`.
+- 🔴 **L'entrant ne passe que si le RELAIS HOME est celui des pairs** (mesuré 03/08, §3 ter).
+  La VM est aux USA, elle choisit `nyc` ; un pair européen envoie vers `nyc` et rien n'arrive,
+  alors que le sortant marche — asymétrie qui ressemble à une ACL et n'en est pas.
+  `tunnel_up.sh` force désormais la région la plus peuplée chez les pairs en ligne
+  (`TS_DERP_REGION` pour surcharger). ⚠️ `force-prefer-derp` est « until restart ».
+- 🔴 **Le port du proxy de session change** quand l'infrastructure redémarre (signe : les MCP se
+  déconnectent/reconnectent). `tailscaled` l'a mémorisé au démarrage ⇒ il perd sa sortie et
+  meurt. Relancer console **puis** `tunnel_up.sh`. ⚠️ Et `tailscale ping` d'un pair vers la VM
+  est soumis à l'ACL : avec une règle `:443` seule, il échoue même quand tout marche — ne pas
+  diagnostiquer avec.
 - ⚠️ **Un nœud porte DEUX noms** : `HostName` (affiché) et `DNSName` (l'URL). Un suffixe `-1`
   marque une collision ; supprimer l'homonyme rend le `HostName` tout seul mais **pas** le
   `DNSName`, figé à l'enregistrement. Pour le reprendre sur un nœud éphémère : `tailscale
