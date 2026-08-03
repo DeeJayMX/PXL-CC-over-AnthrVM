@@ -362,6 +362,9 @@ souhaitable.** Et tant qu'il existe côté Tailscale, sa clé qui traîne dans `
 identifiant valide pour une machine non taguée : le supprimer dans la console rend le fichier
 inerte, et libère le nom pour la VM suivante.
 
+**Suite, même matinée** : le fantôme a été supprimé par Eliott, et le nom repris — voir la
+mesure 7, qui est ce que cette reprise a appris.
+
 **6. 🔴 L'ACL ne peut PAS être vérifiée depuis la VM, et un échec ici ne prouve rien.**
 `curl https://pxl-console-1.<tailnet>.ts.net/` rend `000` — tentant à lire comme « l'isolation
 marche ». C'est faux, et la mesure le montre :
@@ -376,7 +379,36 @@ Aucune des deux erreurs n'est un refus d'ACL. **Seul un poste du tailnet peut v�
 `autogroup:member → tag:pxl-vm:443`.** C'est exactement le piège de l'errata 1 et du §3 bis : une
 opération identifiée par son symptôme n'est pas identifiée pour autant.
 
-**7. Bug du script, corrigé.** La ligne finale sortait vide : le nom était extrait par
+**7. ⚠️ DEUX noms, deux durées de vie — et c'est le mauvais qu'on regarde.** Un nœud Tailscale
+porte un `HostName` (le nom affiché dans la liste des machines) et un `DNSName` (le FQDN
+MagicDNS, celui qu'on tape dans le navigateur). **Ils ne bougent pas ensemble.**
+
+Déroulé mesuré le 03/08 :
+
+| Étape | `HostName` | `DNSName` |
+|---|---|---|
+| nœud homonyme encore présent | `pxl-console-1` | `pxl-console-1.<tailnet>.ts.net` |
+| l'homonyme est supprimé | **`pxl-console`** ← revient seul | `pxl-console-1.…` ← **ne bouge pas** |
+| après `logout` + `up` | `pxl-console` | **`pxl-console.…`** |
+
+Le suffixe `-1` est un marqueur de collision. Supprimer le nœud qui occupait le nom libère le
+`HostName`, et Tailscale le rend spontanément à celui qui le demandait — **mais le `DNSName` est
+figé à l'ENREGISTREMENT.** On voit donc le bon nom dans la console d'admin pendant que l'URL
+continue de porter le suffixe, et on cherche pourquoi « ça ne marche pas ». C'est le genre de
+divergence qu'on met dix minutes à voir parce que les deux champs se ressemblent.
+
+⭐ **La reprise ne demande PAS de recréer la VM.** Le nœud étant éphémère, `tailscale logout` le
+retire du tailnet et `tailscale up` le ré-enregistre sur le nom devenu libre — sans toucher au
+conteneur, donc sans perdre la console qui tourne ni les processus. Un rafraîchissement de
+session aurait coûté tout ça pour le même résultat (voir mesure 1 : rafraîchir = VM neuve).
+⚠️ `serve` est réattaché au nouveau nom par le même passage de `tunnel_up.sh`, mais il faut que
+la console écoute AVANT, sinon on publie un port mort.
+
+**8. ⚠️ Le nœud éphémère ne survit pas à la session.** C'est le prix, assumé, du nettoyage
+automatique : à chaque VM neuve il faut relancer la console puis `bash tunnel_up.sh 8710`. Ce qui
+persiste d'une session à l'autre, c'est `TS_AUTHKEY` et rien d'autre.
+
+**9. Bug du script, corrigé.** La ligne finale sortait vide : le nom était extrait par
 `grep -o '"DNSName":"[^"]*"' | head -1`, qui attrape le premier `DNSName` du JSON et pas celui de
 `Self`. Lire une structure avec un outil qui ne la comprend pas marche jusqu'au jour où l'ordre
 des clés change. Il lit maintenant `.Self` avec un parseur JSON, et affiche le tag avec.

@@ -79,6 +79,12 @@ Détaillé dans `DOSSIER_VM.md` §4 et §7 — les pièges qui coûtent le plus 
   **persiste entre les invocations** — `uptime` mesuré deux fois le prouve. Et 🔴 **l'ACL d'un
   nœud ne se teste pas depuis ce nœud** : proxy → 502, `--accept-dns=false` → pas de MagicDNS.
   Un échec là n'est pas un refus d'ACL. Policy de référence : `tailscale-policy.hujson`.
+- ⚠️ **Un nœud porte DEUX noms** : `HostName` (affiché) et `DNSName` (l'URL). Un suffixe `-1`
+  marque une collision ; supprimer l'homonyme rend le `HostName` tout seul mais **pas** le
+  `DNSName`, figé à l'enregistrement. Pour le reprendre sur un nœud éphémère : `tailscale
+  logout` puis `tunnel_up.sh` — **pas** un rafraîchissement de session, qui recrée la VM et tue
+  la console au passage. ⚠️ Et le nœud éphémère meurt avec la VM : relancer console **puis**
+  tunnel à chaque réveil, dans cet ordre.
 - **Chromium** : contexte sécurisé obligatoire (`http://127.0.0.1:<port>`, pas `about:blank`),
   et Chromium hérite de `HTTPS_PROXY` ⇒ `proxy: {server: 'direct://'}`. Binaire stable :
   `/opt/pw-browsers/chromium` (lien symbolique — ne pas versionner la révision). Ne pas lancer
