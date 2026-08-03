@@ -144,6 +144,19 @@ timeout 40 $TS serve --bg "$PORT" >> "$DIR/tailscaled.log" 2>&1 \
 echo
 $TS status | head -3
 echo
-log "console accessible sur le tailnet · $($TS status --json 2>/dev/null \
-  | grep -o '"DNSName":"[^"]*"' | head -1 | cut -d'"' -f4 | sed 's/\.$//')"
+# ⚠️ Le nom se lit dans `.Self`, pas dans le PREMIER `DNSName` du JSON. Un
+# `grep -o … | head -1` rendait une chaîne vide : l'ordre des clés n'est pas
+# garanti et `Self` n'est pas forcément en tête. Lire une structure avec un
+# outil qui ne la comprend pas marche jusqu'au jour où elle change d'ordre.
+NOM=$($TS status --json 2>/dev/null | node -e \
+  "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{
+     try { const j=JSON.parse(s);
+       console.log(j.Self.DNSName.replace(/\\.$/,''),
+                   j.Self.Tags ? '· '+j.Self.Tags.join(',') : '· 🔴 NON TAGUÉ'); }
+     catch { console.log('(nom indéterminé)'); } })" 2>/dev/null)
+log "console sur le tailnet · https://${NOM%% *}/  ${NOM#* }"
 log "⚠️ tailnet SEUL — rien n'est exposé sur l'internet public."
+# ⚠️ Ne PAS tenter de valider l'accès en curl depuis ici : la VM ne résout pas
+# MagicDNS (`--accept-dns=false`) et son proxy de session rend 502 sur un nom
+# non public. Un échec ici ne prouve rien sur l'ACL — seul un poste du tailnet
+# peut le vérifier. Mesuré le 03/08, voir §3 ter du dossier.

@@ -74,6 +74,11 @@ Détaillé dans `DOSSIER_VM.md` §4 et §7 — les pièges qui coûtent le plus 
   coffre** — la doc interdit d'y mettre des credentials, ses valeurs sont lisibles par quiconque
   utilise l'environnement. Donc scoper la clé plutôt que la croire cachée : **réutilisable +
   éphémère + taguée**. C'est l'errata 8. ⚠️ `serve`, jamais `funnel`.
+- ⚠️ **Une variable d'environnement ne prend effet qu'à la NAISSANCE d'une VM** (mesuré 03/08,
+  §3 ter) : rafraîchir en re-provisionne une, ce n'est pas une synchro. En revanche le conteneur
+  **persiste entre les invocations** — `uptime` mesuré deux fois le prouve. Et 🔴 **l'ACL d'un
+  nœud ne se teste pas depuis ce nœud** : proxy → 502, `--accept-dns=false` → pas de MagicDNS.
+  Un échec là n'est pas un refus d'ACL. Policy de référence : `tailscale-policy.hujson`.
 - **Chromium** : contexte sécurisé obligatoire (`http://127.0.0.1:<port>`, pas `about:blank`),
   et Chromium hérite de `HTTPS_PROXY` ⇒ `proxy: {server: 'direct://'}`. Binaire stable :
   `/opt/pw-browsers/chromium` (lien symbolique — ne pas versionner la révision). Ne pas lancer

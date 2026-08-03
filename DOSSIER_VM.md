@@ -324,6 +324,86 @@ qu'une vraie clé réutilisable ré-authentifie effectivement une VM neuve. Le m
 `--auth-key` est lui mesuré au §3 bis (02/08) ; c'est sa reconduction automatique d'une session
 à l'autre qui reste à confirmer au premier réveil.
 
+### ⭐ Mise en service, mesurée le 03/08/2026 au matin
+
+Première remontée réelle du tunnel avec une clé posée dans l'environnement. Ce qui a été
+observé, dans l'ordre, et ce qu'il faut en conclure — ou pas.
+
+**1. La variable n'arrive PAS « en direct ».** L'hypothèse était plausible (la valeur était là
+après un simple rafraîchissement) et elle est fausse. Mesuré au moment où `TS_AUTHKEY` est
+apparu : `uptime` = **55 s**, `CCR_SPAWN_TIMESTAMP_MS` = 50 s plus tôt. Rafraîchir a
+**re-provisionné une VM neuve**, qui a lu la configuration à *son* démarrage — ce que dit la
+doc. Le résultat est bon, le mécanisme n'est pas celui qu'on croit : ce n'est pas une synchro,
+c'est une renaissance. ⇒ **Pour qu'une variable prenne effet : la poser, puis provoquer une
+session neuve.**
+
+**2. Le conteneur PERSISTE entre les invocations.** Seconde hypothèse à écarter (« ça se refresh
+à chaque appel ») : `uptime` mesuré deux fois à 30 s d'intervalle donne **55 s puis 86 s**, et
+`ps -o lstart= -p 1` rend la même heure de démarrage. Une seule naissance, au rafraîchissement.
+
+**3. Workdir survivant sur VM neuve** — le canari du 02/08 17:18 est retrouvé alors que la VM
+date de 09:47 le lendemain. Reconfirme l'errata 1 : le clone n'est pas refait à chaque VM.
+
+**4. ⭐ Le tag fonctionne.** `tailscale status --json` rend `Self.Tags = ["tag:pxl-vm"]`. La
+policy avait été enregistrée AVANT la génération de la clé, ce qui est l'ordre obligatoire : un
+tag non déclaré dans `tagOwners` n'est pas proposé au moment de créer la clé.
+
+**5. ⚠️ Le nœud s'appelle `pxl-console-1`, pas `pxl-console`.** Un nœud homonyme de la veille,
+créé **avant** le passage à l'éphémère, occupait encore le nom — hors ligne mais présent. ⇒
+**L'éphémère ne rattrape pas le passé** : il ne s'applique qu'aux nœuds nés d'une clé éphémère.
+Les anciens se suppriment à la main dans la console d'admin, sinon les suffixes s'accumulent.
+
+Question posée sur le coup : peut-on le récupérer ? **Techniquement oui** — le scratchpad a
+survécu, `ts.state` (2799 o) et `ts-var/` y sont encore, il suffirait d'y repointer `tailscaled`.
+🔴 **Mais il ne faut pas** : `status --json` le montre **sans aucun tag**, puisqu'il date d'avant
+la policy. Le ressusciter remettrait sur le tailnet un nœud qui agit *en tant que l'utilisateur*,
+avec tous ses droits — exactement ce que le tag venait d'éliminer. **Récupérable n'est pas
+souhaitable.** Et tant qu'il existe côté Tailscale, sa clé qui traîne dans `/tmp` reste un
+identifiant valide pour une machine non taguée : le supprimer dans la console rend le fichier
+inerte, et libère le nom pour la VM suivante.
+
+**6. 🔴 L'ACL ne peut PAS être vérifiée depuis la VM, et un échec ici ne prouve rien.**
+`curl https://pxl-console-1.<tailnet>.ts.net/` rend `000` — tentant à lire comme « l'isolation
+marche ». C'est faux, et la mesure le montre :
+
+| Chemin | Résultat | Ce que ça dit |
+|---|---|---|
+| via le proxy de session | `CONNECT tunnel failed, response 502` | le proxy ne joint pas un nom non public |
+| `--noproxy '*'` | `Could not resolve host` | MagicDNS n'est pas configuré (`--accept-dns=false`) |
+| `http://127.0.0.1:8710/` | **200** | la console tourne bien |
+
+Aucune des deux erreurs n'est un refus d'ACL. **Seul un poste du tailnet peut vérifier la règle
+`autogroup:member → tag:pxl-vm:443`.** C'est exactement le piège de l'errata 1 et du §3 bis : une
+opération identifiée par son symptôme n'est pas identifiée pour autant.
+
+**7. Bug du script, corrigé.** La ligne finale sortait vide : le nom était extrait par
+`grep -o '"DNSName":"[^"]*"' | head -1`, qui attrape le premier `DNSName` du JSON et pas celui de
+`Self`. Lire une structure avec un outil qui ne la comprend pas marche jusqu'au jour où l'ordre
+des clés change. Il lit maintenant `.Self` avec un parseur JSON, et affiche le tag avec.
+
+### Le fichier de policy, et deux pièges de syntaxe
+
+La policy retenue est archivée en clair dans [`tailscale-policy.hujson`](tailscale-policy.hujson)
+— **copie de référence, rien ne l'applique automatiquement**. Elle ne contient aucun secret.
+
+⚠️ Deux erreurs qu'on refera si on ne les note pas :
+
+* **`autogroup:member` est interdit en `dst`.** Seuls `autogroup:self` et `autogroup:internet`
+  y sont valides. En `src`, en revanche, `autogroup:member` va très bien.
+* **`autogroup:self` ne couvre QUE les appareils appartenant à un utilisateur** — une machine
+  taguée n'en fait jamais partie. C'est ce qui exclut la VM de tout le reste sans qu'on ait à
+  l'écrire, et c'est aussi pourquoi elle a besoin de sa propre ligne.
+
+⚠️ **Identité GitHub** : sur un tailnet où l'on se connecte par GitHub, un utilisateur s'écrit
+`username@github` et non par son adresse e-mail. La valeur exacte est affichée dans
+**admin console → Users** ; ne pas la deviner, la casse compte.
+
+⚠️ **La règle `{"src": ["*"], "dst": ["*:*"]}` du fichier d'exemple annule tout.** Poser un tag
+sans la retirer donne l'identité séparée et le key-expiry désactivé, mais **aucune isolation
+réseau**. Le bloc `tests` est le garde-fou : une assertion qui échoue fait REFUSER
+l'enregistrement. Et rassurant dans tous les cas — les ACL ne gouvernent pas l'accès à la console
+d'admin, donc une policy catastrophique se corrige depuis le navigateur.
+
 ---
 
 ## 4. ⭐ GitHub : deux couches d'application, et ce qu'elles refusent

@@ -1,0 +1,117 @@
+// Tailnet policy — PXL. COPIE DE RÉFÉRENCE.
+//
+// 🔴 Rien n'applique ce fichier. La policy vit dans la console d'admin Tailscale
+// (Access controls) ; ceci en est une copie pour ne pas la re-déduire dans six
+// mois. Si les deux divergent, c'est la console qui fait foi.
+//
+// Aucun secret ici : une policy décrit une structure d'accès, pas des clés.
+//
+// ⚠️ ORDRE OBLIGATOIRE : enregistrer cette policy AVANT de générer l'auth key.
+// Un tag non déclaré dans `tagOwners` n'est pas proposé au moment de créer la
+// clé — et on cherche longtemps pourquoi.
+//
+// Voir DOSSIER_VM.md §3 ter pour le raisonnement complet et les mesures.
+{
+	// ─── Groupes ──────────────────────────────────────────────────────────────
+	// Rien à déclarer sur un tailnet personnel : `autogroup:member` suffit.
+	// "groups": {
+	//  	"group:example": ["alice@example.com", "bob@example.com"],
+	// },
+
+	// ─── Tags ─────────────────────────────────────────────────────────────────
+	// Un tag est une IDENTITÉ DE MACHINE, distincte d'un utilisateur.
+	//
+	// Sans lui, la VM Claude Code rejoint le tailnet EN TANT QU'ELIOTT et hérite
+	// de ses droits : une clé qui fuite donne une machine qui agit comme lui.
+	// Avec lui, la machine perd toute authentification liée à un utilisateur et
+	// ne peut plus faire que ce que les règles ci-dessous autorisent.
+	//
+	// ⚠️ Un tag DOIT être déclaré ici avant de pouvoir être posé sur une auth
+	// key. Mesuré le 03/08 : avec la déclaration en place, le nœud remonte bien
+	// avec `Self.Tags = ["tag:pxl-vm"]`.
+	"tagOwners": {
+		"tag:pxl-vm": ["autogroup:admin"],
+	},
+
+	// ─── Accès ────────────────────────────────────────────────────────────────
+	"acls": [
+		// Les appareils d'un utilisateur entre eux. C'est ce que l'« allow all »
+		// du fichier d'exemple faisait en pratique sur un tailnet personnel.
+		//
+		// ⚠️ PIÈGE 1 : `autogroup:member` est INTERDIT en `dst` — seuls
+		// `autogroup:self` et `autogroup:internet` y sont valides. En `src`, il
+		// va très bien. C'est asymétrique et rien ne le laisse deviner.
+		//
+		// ⚠️ PIÈGE 2 : `autogroup:self` ne couvre QUE les appareils appartenant
+		// à un utilisateur. Une machine taguée n'en fait JAMAIS partie — d'où la
+		// règle suivante, et d'où le fait que la VM soit exclue de tout le reste
+		// sans qu'on ait à l'écrire.
+		{"action": "accept", "src": ["autogroup:member"], "dst": ["autogroup:self:*"]},
+
+		// Eliott → la console de la VM, en HTTPS. 443 parce que c'est le port
+		// sur lequel `tailscale serve` publie, avec le nom MagicDNS du nœud.
+		// Le port est explicite et pas `:*` : rien d'autre n'a besoin d'être
+		// joignable sur cette machine.
+		{"action": "accept", "src": ["autogroup:member"], "dst": ["tag:pxl-vm:443"]},
+
+		// ⚠️ ET SURTOUT : aucune règle n'a `tag:pxl-vm` en `src`. La VM ne peut
+		// donc joindre aucune machine du tailnet. Sa sortie internet et son
+		// relais DERP ne passent pas par les ACL — elle fonctionne normalement,
+		// elle est juste incapable d'entrer chez qui que ce soit.
+		//
+		// 🔴 NON VÉRIFIÉ depuis la VM, et ça ne peut pas l'être : un `curl` vers
+		// son propre nom tailnet échoue pour deux raisons qui n'ont rien à voir
+		// avec l'ACL (proxy de session → 502 ; `--accept-dns=false` → pas de
+		// MagicDNS). Un échec là-bas ne prouve rien. Seul un poste du tailnet
+		// peut valider cette règle. Voir §3 ter, mesure 6.
+	],
+
+	// ─── SSH ──────────────────────────────────────────────────────────────────
+	// Inchangé par rapport au fichier d'exemple. `autogroup:self` excluant les
+	// machines taguées, la VM n'est pas joignable en SSH — comportement voulu,
+	// obtenu sans rien écrire de plus.
+	"ssh": [
+		{
+			"action": "check",
+			"src":    ["autogroup:member"],
+			"dst":    ["autogroup:self"],
+			"users":  ["autogroup:nonroot", "root"],
+		},
+	],
+
+	// ─── Funnel ───────────────────────────────────────────────────────────────
+	// ⚠️ LAISSÉ ACTIF : rien ne change par rapport au fichier d'exemple.
+	//
+	// Cet attribut autorise Funnel — l'exposition sur l'internet PUBLIC. Eliott
+	// a coupé l'exposition publique le 02/08 et `tunnel_up.sh` refuse `funnel`
+	// par convention, mais une convention dans un script se contourne par
+	// accident. Commenter ce bloc rendrait Funnel STRUCTURELLEMENT impossible
+	// sur tout le tailnet, quoi que lance n'importe quel script. `serve` n'est
+	// pas concerné : lui n'a pas besoin de cet attribut.
+	//
+	// ⚠️ Ça vaudrait pour TOUS les appareils, pas seulement la VM. Décision non
+	// prise à ce jour — la laisser à Eliott plutôt que la glisser dans un
+	// copier-coller.
+	"nodeAttrs": [
+		{
+			"target": ["autogroup:member"],
+			"attr":   ["funnel"],
+		},
+	],
+
+	// ─── Le garde-fou ─────────────────────────────────────────────────────────
+	// Si une assertion échoue, Tailscale REFUSE d'enregistrer le fichier. On ne
+	// peut donc pas publier une policy qui coupe l'accès à la console, ni une
+	// qui ouvrirait le SSH de la VM par mégarde.
+	//
+	// ⚠️ Sur un tailnet où l'on se connecte par GitHub, un utilisateur s'écrit
+	// `username@github` et NON par son adresse e-mail. La valeur exacte est
+	// affichée dans admin console → Users : ne pas la deviner, la casse compte.
+	"tests": [
+		{
+			"src":    "<login>@github",
+			"accept": ["tag:pxl-vm:443"],
+			"deny":   ["tag:pxl-vm:22"],
+		},
+	],
+}
