@@ -15,25 +15,43 @@
 #      faire passer pour cette machine sur le tailnet. Un dépôt n'est pas un
 #      coffre, et celui-ci est de surcroît destiné à être lu.
 #
-# ⭐ Ce qui PEUT être persistant, c'est la **clé d'authentification**, et elle
-# doit vivre là où la VM ne peut pas l'emporter dans sa tombe : dans les
-# variables d'environnement de l'environnement Claude Code, qui sont
-# reconfigurées à chaque démarrage de session. La VM redevient neuve, la clé la
-# réattend. C'est le seul endroit du dispositif qui survive à un recyclage sans
-# être un dépôt git.
+# ⭐ Ce qui PEUT être persistant, c'est la **clé d'authentification**, dans les
+# variables d'environnement de l'environnement Claude Code — le seul endroit du
+# dispositif qui survive à un recyclage sans être un dépôt git.
 #
-#   Où la poser  : réglages de l'environnement Claude Code → variables
-#                  d'environnement → `TS_AUTHKEY`
-#   Quelle clé   : une auth key **réutilisable** (Tailscale admin → Settings →
-#                  Keys → Generate auth key → Reusable). Une clé à usage unique
-#                  ne servirait qu'une session, ce qui ne résout rien.
-#   Durée de vie : 90 jours au maximum côté Tailscale. Ça ne se contourne pas —
-#                  il faudra la régénérer, et ce script le dira clairement le
-#                  jour où elle expirera plutôt que d'échouer en silence.
+#   Où la poser : claude.ai/code → l'icône **nuage** dans la rangée AU-DESSUS de
+#                 la zone de saisie (il n'y a ni page de réglages ni URL directe,
+#                 c'est pour ça qu'on la cherche) → roue dentée → Environment
+#                 variables, au format .env :  TS_AUTHKEY=tskey-auth-…
+#   ⚠️ Effet     : les valeurs sont copiées au DÉMARRAGE d'une session. Une
+#                 modification n'atteint que les sessions ouvertes ensuite.
 #
-# ⚠️ La clé n'est jamais affichée, jamais écrite sur le disque, jamais passée en
-# argument de ligne de commande — `ps` est lisible par tout le monde. Elle ne
-# transite que par l'environnement du processus `tailscale up`.
+# 🔴 **Ce n'est PAS un coffre à secrets, et la doc l'interdit explicitement** :
+# « no dedicated secrets store, so don't add API keys or other credentials ».
+# Quiconque utilise l'environnement lit les valeurs. Il n'existe aucun endroit
+# sûr ici — ni cette boîte, ni le setup script, ni ce dépôt. La bonne question
+# n'est donc pas où la cacher, mais comment rendre sa fuite sans conséquence.
+#
+# ⇒ Générer la clé **réutilisable + ÉPHÉMÈRE + TAGUÉE** (Tailscale admin →
+#   Settings → Keys), avec une ACL qui borne le tag. Réutilisable, sinon elle ne
+#   sert qu'une session ; éphémère, pour que le nœud s'efface en se déconnectant
+#   et qu'une clé volée ne donne qu'un nœud qui s'évapore ; taguée, pour qu'elle
+#   n'ouvre pas le tailnet. ⚠️ 90 jours est le plafond Tailscale : elle expirera,
+#   et ce script le dira clairement le jour venu plutôt que d'échouer en silence.
+#
+# ⚠️ Sur un compte Pro/Max une session partagée est PUBLIQUE. Ce script
+# n'affiche jamais la clé et ne l'écrit jamais sur le disque — ne pas défaire ça,
+# et ne jamais demander à une session d'afficher $TS_AUTHKEY.
+#
+# ⚠️ En revanche la clé PASSE bien par la ligne de commande, et il faut le dire
+# plutôt que le maquiller : `tailscale up` ne lit pas `TS_AUTHKEY` dans son
+# environnement — `--auth-key` est la seule entrée (mesuré sur 1.98.10, `up
+# --help`). La seule alternative offerte est `--auth-key=file:/chemin`, qui
+# l'écrit sur le disque : ce n'est pas mieux, c'est pire. Elle est donc visible
+# dans `/proc/<pid>/cmdline` le temps de l'appel. Mesuré ici : la VM tourne en
+# uid 0 et `/proc/self/environ` est en 0400 — un seul utilisateur, donc la même
+# frontière de confiance de toute façon. 🔴 Sur une machine PARTAGÉE, ce
+# raisonnement tombe : n'y lancez pas ce script tel quel.
 #
 # ─── Deux pièges déjà payés, gardés ici pour ne pas les repayer ───────────────
 #
@@ -64,12 +82,14 @@ die() { printf '\n🔴 %s\n' "$*" >&2; exit 1; }
 if [ -z "${TS_AUTHKEY:-}" ]; then
   die "TS_AUTHKEY absent de l'environnement.
 
-    C'est le seul endroit où une clé survit à un recyclage de VM :
-      réglages de l'environnement Claude Code → variables d'environnement
-      TS_AUTHKEY = tskey-auth-…   (auth key RÉUTILISABLE, 90 j max)
+    Où le poser — ce n'est PAS dans une page de réglages :
+      claude.ai/code → icône nuage AU-DESSUS de la zone de saisie
+                     → roue dentée → Environment variables
+      TS_AUTHKEY=tskey-auth-…
 
-    Ni le workdir ni ce dépôt ne conviennent — le premier disparaît, le second
-    publierait un secret. Voir l'en-tête de ce fichier."
+    Générer la clé réutilisable + ÉPHÉMÈRE + TAGUÉE : cette boîte n'est pas un
+    coffre, ses valeurs sont lisibles par quiconque utilise l'environnement.
+    Voir l'en-tête de ce fichier."
 fi
 
 # ── 2. Les binaires. Absents d'une VM neuve : on les retire par TCP/443.
@@ -98,13 +118,14 @@ else
   log "tailscaled tourne déjà"
 fi
 
-# ── 4. L'authentification. La clé passe par l'ENVIRONNEMENT du processus, pas
-#      par la ligne de commande : `ps aux` est lisible par n'importe qui.
+# ── 4. L'authentification. ⚠️ `--auth-key` est la SEULE entrée : `tailscale up`
+#      ne lit pas TS_AUTHKEY dans son environnement (mesuré, 1.98.10). Voir
+#      l'en-tête pour ce que ça expose et pourquoi c'est accepté ici.
 if $TS status > /dev/null 2>&1; then
   log "nœud déjà authentifié"
 else
   log "authentification par clé (relais DERP — l'egress interdit le direct)"
-  if ! TS_AUTHKEY="$TS_AUTHKEY" timeout 90 "$DIR/tailscale" --socket="$DIR/ts.sock" up \
+  if ! timeout 90 "$DIR/tailscale" --socket="$DIR/ts.sock" up \
        --auth-key="$TS_AUTHKEY" --hostname="${TS_HOSTNAME:-pxl-console}" \
        --accept-dns=false >> "$DIR/tailscaled.log" 2>&1; then
     die "authentification refusée.

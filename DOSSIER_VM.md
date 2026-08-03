@@ -250,17 +250,66 @@ endroit du dispositif qui survive à un recyclage sans être un dépôt git : le
 d'environnement de l'environnement Claude Code**, réappliquées à chaque démarrage de session.
 La VM redevient neuve, la clé la réattend.
 
+#### Où se règlent les variables d'environnement — ce n'est pas dans les réglages
+
+⭐ **Il n'y a ni page de réglages ni URL directe** pour ça, et c'est pour cette raison qu'on peut
+le chercher longtemps. La doc le dit : « *There's no settings page or direct URL for the
+selector.* » Le chemin réel :
+
+1. **claude.ai/code**
+2. dans la rangée **au-dessus de la zone de saisie**, l'**icône nuage portant le nom de
+   l'environnement courant** (« Default » par défaut)
+3. **Add cloud environment**, ou survoler un environnement existant → **roue dentée** à droite
+4. la boîte contient Name · Network access · **Environment variables** · Setup script
+5. format `.env`, une paire `CLÉ=valeur` par ligne
+
+⚠️ **Les valeurs sont copiées au DÉMARRAGE de la session.** Modifier une variable n'atteint que
+les sessions ouvertes ensuite ; celles qui tournent gardent ce avec quoi elles ont démarré.
+
+#### 🔴 Mais ce n'est PAS un coffre à secrets, et la doc l'interdit explicitement
+
+> *Anyone who uses the environment can read the values, and cloud environments have **no
+> dedicated secrets store**, so **don't add API keys or other credentials**.*
+
+La boîte de dialogue affiche cet avertissement elle-même. Il n'existe **aucun** endroit sûr dans
+ce dispositif : ni les variables d'environnement, ni le setup script (même visibilité), ni le
+dépôt (public par nature). Le tableau « what carries over » range d'ailleurs *Static API tokens
+and credentials* en **No**, avec « No dedicated secrets store exists yet ».
+
+⚠️ Aggravant sur un compte **Pro/Max** : une session partagée est **publique**. Une clé tapée à
+la main dans une session, ou affichée par une commande, part avec le partage.
+
+**La bonne question n'est donc pas « où la cacher » mais « comment rendre sa fuite sans
+conséquence ».** Une auth key Tailscale, contrairement à un token d'API, se **scope** :
+
+| Option à la génération | Ce qu'elle achète |
+|---|---|
+| **Reusable** | sans elle la clé ne sert qu'une session — le problème n'est pas résolu |
+| **Ephemeral** | le nœud se supprime seul dès qu'il se déconnecte : un recyclage ne laisse pas de fantôme, et une clé volée ne donne qu'un nœud qui s'évapore |
+| **Tag** (`tag:pxl-vm`) + ACL | le nœud ne peut qu'atteindre ce que l'ACL autorise, et rien du reste du tailnet |
+| Expiration courte (30 j) | réduit la fenêtre ; ⚠️ **90 jours est le plafond Tailscale**, ça ne se contourne pas |
+
+Ainsi scopée, le pire cas d'une fuite devient « un nœud éphémère, tagué, borné par ACL », et non
+« quelqu'un est sur le réseau ». C'est un risque **acceptable en connaissance de cause** — ce qui
+est la seule forme acceptable ici, puisque aucune option ne le supprime.
+
 | | |
 |---|---|
-| Où | réglages de l'environnement → variables d'environnement → `TS_AUTHKEY` |
-| Quoi | une auth key **réutilisable** (Tailscale admin → Settings → Keys → Reusable) |
-| ⚠️ Durée | **90 jours au maximum**, plafond Tailscale. Ça ne se contourne pas : il faudra la régénérer |
+| Où | claude.ai/code → icône nuage au-dessus de la saisie → roue dentée → Environment variables |
+| Quoi | `TS_AUTHKEY=tskey-auth-…`, clé **réutilisable + éphémère + taguée** |
+| 🔴 Visibilité | lisible par quiconque utilise l'environnement — ce n'est pas un coffre |
 
-`tunnel_up.sh` à la racine consomme cette variable et remonte tout : téléchargement des
+`tunnel_up.sh` à la racine consomme cette variable — d'où qu'elle vienne — et remonte tout : téléchargement des
 binaires (absents d'une VM neuve, retirés par TCP/443), démon en `--statedir`, `up --auth-key`,
-puis `serve`. Idempotent — il ne relance pas ce qui tourne. La clé ne transite que par
-l'environnement du processus : jamais affichée, jamais écrite, **jamais en argument de ligne de
-commande**, `ps` étant lisible par tout le monde.
+puis `serve`. Idempotent — il ne relance pas ce qui tourne. La clé n'est jamais affichée ni
+écrite sur le disque.
+
+⚠️ **Mesuré le 03/08 (Tailscale 1.98.10, `up --help`)** : `tailscale up` **ne lit pas**
+`TS_AUTHKEY` dans son environnement — `--auth-key` est la seule entrée, et sa seule alternative
+`--auth-key=file:/chemin` l'écrit sur le disque, ce qui est pire. La clé apparaît donc dans
+`/proc/<pid>/cmdline` le temps de l'appel. Mesuré aussi : la VM tourne en **uid 0** et
+`/proc/self/environ` est en **0400** — un seul utilisateur, donc la même frontière de confiance
+que l'environnement lui-même. C'est acceptable *ici* et 🔴 pas sur une machine partagée.
 
 ⚠️ **`serve`, jamais `funnel`.** `serve` publie sur le tailnet seul ; `funnel` ouvre sur
 l'internet public. L'exposition publique a été coupée sur décision d'Eliott le 02/08/2026, et un
@@ -528,6 +577,27 @@ Trois choses apprises, et la troisième est la vraie leçon :
    trouve une confirmation de la thèse fausse. **Leçon : un rapport de seconde main marqué
    « non vérifié » ne devient pas un 🔴 — il devient une sonde à écrire.** Elle tenait en un
    appel.
+
+8. ❌ **« Les variables d'environnement de l'environnement Claude Code sont l'endroit où poser
+   la clé Tailscale. »** (03/08, §3 ter, écrit le soir — corrigé le lendemain matin en allant
+   chercher le chemin d'interface exact, qu'on ne m'avait pas demandé de vérifier.)
+
+   L'observation était juste : c'est bien le **seul** endroit du dispositif qui survive à un
+   recyclage sans être un dépôt git. La conclusion ne l'était pas : j'en ai déduit que c'était
+   donc l'endroit **sûr**, sans lire ce que le produit en dit. Il en dit le contraire —
+   « no dedicated secrets store, so don't add API keys or other credentials » — et la boîte de
+   dialogue affiche l'avertissement à l'écran, au moment même où on tape la valeur.
+
+   **Leçon : « le seul endroit possible » n'est pas « un endroit prévu pour ça ».** Une
+   élimination qui ne laisse qu'un candidat prouve qu'il est le dernier, pas qu'il convient.
+   Quand l'élimination ne laisse rien de sûr, la réponse honnête n'est pas de promouvoir le
+   moins mauvais au rang de solution : c'est de dire qu'il n'y a pas de coffre, et de déplacer
+   l'effort sur la **réduction du rayon d'explosion** — ici, scoper la clé (éphémère, taguée,
+   ACL) plutôt que prétendre la cacher.
+
+   Aggravant, du même genre que l'errata 7 : la recommandation a été écrite **au moment de
+   conclure la session**, quand rien n'invitait plus à vérifier. C'est exactement là qu'une
+   affirmation non mesurée passe.
 
 ---
 

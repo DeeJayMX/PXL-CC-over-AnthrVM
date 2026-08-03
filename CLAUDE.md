@@ -68,8 +68,12 @@ Détaillé dans `DOSSIER_VM.md` §4 et §7 — les pièges qui coûtent le plus 
   Attention : les deux rendent un **plan de contrôle qui réussit** avant d'échouer.
 - **Remonter le tunnel dans une VM neuve** : `bash tunnel_up.sh [port]` (§3 ter). 🔴 La clé de
   nœud n'est pas persistable — le workdir disparaît, et la versionner publierait un secret.
-  C'est `TS_AUTHKEY`, dans les variables d'environnement de l'environnement Claude Code, qui
-  survit ; le script la consomme. ⚠️ `serve`, jamais `funnel`.
+  C'est `TS_AUTHKEY` qui survit, dans les variables d'environnement de l'environnement Claude
+  Code : **claude.ai/code → icône nuage au-dessus de la saisie → roue dentée** (il n'y a ni page
+  de réglages ni URL directe, d'où la difficulté à la trouver). 🔴 **Cette boîte n'est pas un
+  coffre** — la doc interdit d'y mettre des credentials, ses valeurs sont lisibles par quiconque
+  utilise l'environnement. Donc scoper la clé plutôt que la croire cachée : **réutilisable +
+  éphémère + taguée**. C'est l'errata 8. ⚠️ `serve`, jamais `funnel`.
 - **Chromium** : contexte sécurisé obligatoire (`http://127.0.0.1:<port>`, pas `about:blank`),
   et Chromium hérite de `HTTPS_PROXY` ⇒ `proxy: {server: 'direct://'}`. Binaire stable :
   `/opt/pw-browsers/chromium` (lien symbolique — ne pas versionner la révision). Ne pas lancer
