@@ -250,6 +250,29 @@ endroit du dispositif qui survive à un recyclage sans être un dépôt git : le
 d'environnement de l'environnement Claude Code**, réappliquées à chaque démarrage de session.
 La VM redevient neuve, la clé la réattend.
 
+#### ⭐ Marche à suivre — ce qui est automatique, et ce qui reste à faire une fois
+
+**Automatique.** Un hook `SessionStart` (`.claude/settings.json` → `session_start.sh`) relance à
+chaque invocation, dans cet ordre : la **console**, puis le **tunnel**. Idempotent — sur une
+session déjà chaude il ne relance rien et rend la main en ~10 s. Il détecte aussi le cas du
+proxy qui a changé de port (voir plus bas) et relance `tailscaled` quand c'est arrivé. Il sort
+**toujours en 0** : un hook qui échoue ferait échouer le démarrage de la session.
+
+**À faire UNE fois**, dans les variables d'environnement de l'environnement Claude Code
+(claude.ai/code → icône nuage au-dessus de la saisie → roue dentée) :
+
+| Variable | Pourquoi |
+|---|---|
+| `TS_AUTHKEY` | sans elle, pas de tunnel. Clé **réutilisable + éphémère + taguée** |
+| `PXL_CONSOLE_MOTDEPASSE` | sans elle, le serveur en **tire un au sort à chaque réveil** et la console devient inutilisable en pratique |
+
+⚠️ Les deux sont lisibles par quiconque utilise l'environnement — ce n'est pas un coffre, voir
+plus bas. Un mot de passe de console derrière un tailnet et une ACL est un risque proportionné ;
+la clé Tailscale, elle, doit être scopée (éphémère + taguée) plutôt que crue cachée.
+
+**À faire à la main quand ça casse** : rien, en principe. Si le hook n'a pas tourné,
+`bash session_start.sh` fait la même chose.
+
 #### Où se règlent les variables d'environnement — ce n'est pas dans les réglages
 
 ⭐ **Il n'y a ni page de réglages ni URL directe** pour ça, et c'est pour cette raison qu'on peut

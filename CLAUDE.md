@@ -79,6 +79,10 @@ Détaillé dans `DOSSIER_VM.md` §4 et §7 — les pièges qui coûtent le plus 
   **persiste entre les invocations** — `uptime` mesuré deux fois le prouve. Et 🔴 **l'ACL d'un
   nœud ne se teste pas depuis ce nœud** : proxy → 502, `--accept-dns=false` → pas de MagicDNS.
   Un échec là n'est pas un refus d'ACL. Policy de référence : `tailscale-policy.hujson`.
+- ⭐ **Le tunnel se remonte TOUT SEUL** : hook `SessionStart` → `session_start.sh` (console puis
+  tunnel, idempotent, ~10 s à chaud, sort toujours en 0). Deux variables à poser une fois dans
+  l'environnement : `TS_AUTHKEY` et `PXL_CONSOLE_MOTDEPASSE` — sans la seconde, le mot de passe
+  de la console est tiré au sort à chaque réveil.
 - 🔴 **L'entrant ne passe que si le RELAIS HOME est celui des pairs** (mesuré 03/08, §3 ter).
   La VM est aux USA, elle choisit `nyc` ; un pair européen envoie vers `nyc` et rien n'arrive,
   alors que le sortant marche — asymétrie qui ressemble à une ACL et n'en est pas.
