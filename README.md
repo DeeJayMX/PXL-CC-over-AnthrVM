@@ -18,6 +18,9 @@ mesurés dans ce dossier ([`DOSSIER_VM.md`](DOSSIER_VM.md) §4), qui se refermen
 2. **Attacher un dépôt à une session déjà lancée l'est aussi** — le périmètre GitHub est figé au
    démarrage de la VM ; un dépôt créé en cours de route reste hors d'atteinte jusqu'à la session
    suivante.
+   ⚠️ *Corrigé le 18/08 : ce second verrou est tombé pour les dépôts PRÉEXISTANTS —
+   `add_repo` mesuré trois fois de l'intérieur, push compris ([`DOSSIER_VM.md`](DOSSIER_VM.md)
+   §4 et erratum 6). Le récit d'origine reste vrai à sa date.*
 
 ⇒ **Aucune séquence ne part de rien et n'aboutit à du contenu poussé dans un dépôt neuf en une
 seule session cloud.** Le contournement — écrire sur une branche dédiée d'un dépôt déjà attaché,

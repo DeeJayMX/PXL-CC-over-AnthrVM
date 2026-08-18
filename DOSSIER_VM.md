@@ -158,14 +158,25 @@ Il n'y a **pas de `gh` CLI**. Deux chemins seulement, et **ils n'ont pas les mê
 **Périmètre — le second verrou, et il enferme.** La session est liée à une liste de dépôts
 fixée **au démarrage de la VM**.
 
-> 🔴 **Un dépôt ne peut pas être attaché à une session déjà lancée** (rapporté par Eliott le
-> 01/08 ; non vérifié de l'intérieur, `add_repo` n'ayant pas été appelé). L'outil `add_repo`
-> existe et sa description annonce l'inverse — **ne pas s'y fier**.
+> 🔴 ~~**Un dépôt ne peut pas être attaché à une session déjà lancée**~~ (rapporté par Eliott le
+> 01/08 ; non vérifié de l'intérieur, `add_repo` n'ayant pas été appelé).
+>
+> ✅ **CORRIGÉ — mesuré de l'intérieur le 18/08, trois fois** : `add_repo` a attaché
+> `PXL-SPOUT-TurboHQ` (accès push, **pushes vers master réussis** dans la même session),
+> `PXL-Switcher` et `PXL-CC-over-AnthrVM` — clone, `register_repo_root`, lecture ET écriture,
+> tout dans la session en cours. Le périmètre GitHub n'est PAS figé au démarrage.
+> ⚠️ **La correction est précise, pas totale** : les trois dépôts attachés PRÉEXISTAIENT à la
+> session. Le scénario du 01/08 — un dépôt **créé pendant** la session puis attaché — reste
+> non vérifié (la création elle-même prend toujours 403, donc il faudrait une création humaine
+> en cours de session pour trancher ; la propagation d'installation de l'App est un suspect
+> plausible du refus d'origine). Erratum 6.
 >
 > **Conséquence, et c'est le piège** : les deux verrous se referment l'un sur l'autre. On ne peut
 > pas créer un dépôt depuis la session ; et le dépôt créé à la main pendant la session **reste
 > hors d'atteinte jusqu'à la session suivante**. Il n'existe donc **aucune séquence** qui, en une
 > session, part de rien et aboutit à du contenu poussé dans un dépôt neuf.
+> ⚠️ *18/08 : le second verrou est tombé pour les dépôts préexistants (voir plus haut) — le
+> double-verrou ne tient plus que sur le scénario « créé pendant la session », non re-mesuré.*
 >
 > ⇒ **Le contournement** : écrire le contenu sur une **branche dédiée d'un dépôt déjà attaché**,
 > partant de `main` et n'ajoutant que le dossier — son diff contre `main` *est* le futur dépôt.
@@ -183,7 +194,7 @@ ce qui a été fait sur `pxl-airlink` le 01/08.
 | Présent | Absent (et ce qu'on fait à la place) |
 |---|---|
 | `git`, `make`, `cmake`, `gcc`, **`clang` 18** | **`gh`** → MCP GitHub (§4) |
-| `node` 22 (`/opt/node22`), `python3`, `rustc`, `go` | **`ffmpeg`** en PATH → un binaire existe sous `/opt/pw-browsers/ffmpeg-*` |
+| `node` 22 (`/opt/node22`), `python3`, `rustc`, `go` | **`ffmpeg`** en PATH → ⭐ **`apt-get update && apt-get install -y ffmpeg` MARCHE** (mesuré 18/08) : 6.1.1 **avec libx264, libx265, libopus**. ⚠️ Sans le `update` d'abord, l'install échoue sur des index périmés (404). Le binaire `/opt/pw-browsers/ffmpeg-*` reste le repli sans réseau |
 | **`docker`** | **`aarch64-linux-gnu-gcc`** → ⭐ voir ci-dessous |
 | Chromium + Playwright (§6) | **`qemu-aarch64`** → ⇒ **rien d'ARM ne peut être *exécuté*** |
 
@@ -213,6 +224,10 @@ ce qui a été fait sur `pxl-airlink` le 01/08.
 | **WebGPU** | ✅ via **SwiftShader** (adapter « google / swiftshader », Vulkan logiciel). Pipeline compute WGSL complet validé, readback correct, textures `r8unorm`/`rg8unorm` 1080p |
 | **WebCodecs — VP9, AV1** | ✅ décodeurs logiciels |
 | **WebCodecs — H.264/HEVC** | ❌ build sans codecs propriétaires, aucun matériel |
+| **VideoENCODER** (mesuré 18/08, `isConfigSupported`) | AV1 ✅ · VP9 ✅ · **H.264 ❌ · HEVC ❌** — et l'encodeur AV1 **n'émet PAS de `decoderConfig.description`** (flux auto-décrit ; tout muxeur doit synthétiser l'av1C) |
+| **AudioEncoder** (18/08) | **Opus ✅ · AAC ❌** |
+| **File System Access** (18/08) | ❌ `showDirectoryPicker` absent en headless — se mocke par `addInitScript` (write/close/getFile suffisent pour un banc d'enregistreur) |
+| **getUserMedia** (18/08) | ✅ avec `--use-fake-device-for-media-stream --use-fake-ui-for-media-stream` — caméra + micro factices, pipeline WebCodecs complet dessus |
 | Allocation « VRAM » | 1 500 slots NV12 1080p (**~4,7 Go**) sans OOM — la « VRAM » **est** la RAM du conteneur |
 
 ### Les pièges, déjà payés
@@ -236,7 +251,8 @@ ce qui a été fait sur `pxl-airlink` le 01/08.
 |---|---|---|
 | Logique pure | VM (node) | maths, bookkeeping, property tests, simulateurs |
 | Fonctionnel complet | VM (Chromium headless, média **VP9/AV1** basse rés) | comportement — **pas** la performance |
-| Vérité physique | **Machine locale** | H.264/HEVC, GPU réel, NVDEC, timings, 4K |
+| **Bitstream/conteneur H.264-HEVC** | VM (**ffmpeg apt + x264/x265**, 18/08) | protocole, muxage, remux — `-err_detect explode -f null` fait foi. C'est ce qui a validé toute la chaîne thq-publish/record/ingest en vrais codecs |
+| Vérité physique | **Machine locale** | H.264/HEVC **matériels**, GPU réel, NVDEC, timings, 4K |
 
 ---
 
@@ -291,6 +307,17 @@ ce qui a été fait sur `pxl-airlink` le 01/08.
    sonde affichait les deux verdicts à la fois. **Leçon : sous `pipefail`, capturer avant de
    filtrer quand la commande de gauche a le droit d'échouer.** (Les deux autres : `$HOME` vaut
    `/root` et non le workdir ; f-string Python avec guillemets doubles imbriqués.)
+
+6. ❌ **L'erratum 3 s'est trompé dans l'autre sens.** « Le périmètre est figé au démarrage de
+   la VM » — mesuré le 18/08 : **`add_repo` attache bel et bien des dépôts en cours de
+   session**, trois fois, clone + register + pushes vers master compris. La correction du 01/08
+   avait généralisé UN échec (un dépôt créé pendant la session) en une politique (« le périmètre
+   est figé ») — sans mesurer l'attachement d'un dépôt préexistant, qui est le cas courant.
+   **Leçon : corriger une erreur avec un énoncé plus large que la mesure qui le fonde, c'est
+   préparer l'erratum suivant.** Le résidu exact qui reste non vérifié : attacher un dépôt créé
+   PENDANT la session (propagation d'installation de l'App suspectée). Et l'environnement a pu
+   changer entre le 01/08 et le 18/08 — les deux mesures peuvent avoir été justes chacune à sa
+   date ; c'est indécidable rétroactivement, et c'est une raison de plus de dater tout.
 
 ---
 
