@@ -602,6 +602,47 @@ Ce que chaque environnement voyait, à quelques heures d'écart, même dépôt, 
   signalé à 07:16) ; `serve` a été publié quand même — l'URL existera dès qu'un processus
   écoutera. Non bloquant, conforme à la mission.
 
+### ⭐ 19/08, troisième session : le réglage re-posé a ATTEINT « PXL cloud » (mesuré le 19/08/2026, session de 07:17)
+
+Après le constat *(b)* ci-dessus, Eliott a re-modifié les réglages de l'environnement
+« PXL cloud » ; une session neuve y a été ouverte à 07:17 pour en prendre la photo. Cette
+fois **tout y est** — même environnement que la session bloquée de 07:12, une heure d'écart :
+
+| Mesure (« PXL cloud », 07:17) | Résultat |
+|---|---|
+| `TS_AUTHKEY` | **présent** (61 caractères, non affichée) |
+| `curl --noproxy '*' https://controlplane.tailscale.com/key?v=138` | **200**, JSON des clés publiques |
+| `https://example.com/` (hôte sans rapport) | **403** `Host not in allowlist` — l'allowlist est **restrictive** ici |
+| Issuer du certificat de `controlplane.tailscale.com` | `O=Anthropic, CN=Egress Gateway SDS Issuing CA (production)` |
+
+> ⭐ Les deux environnements ont donc des **politiques différentes derrière la même
+> passerelle** : « PXL cloud » = allowlist par hôte (seuls les hôtes ajoutés passent),
+> « All-Access » = tout relayé. Et le blocage de 07:12 n'était ni *(a)* ni tout à fait *(b)*
+> tel qu'écrit : le re-réglage par Eliott a suffi, une session neuve du **même** environnement
+> voit la nouvelle allowlist. Ce qui reste vrai du §3 ter : la photo se prend à la naissance
+> de la VM — la session de 07:12, née avant le re-réglage, ne l'a jamais vue.
+
+**Le nœud est monté — et le hook l'avait monté TOUT SEUL avant la mission** : à 07:18,
+`session_start.sh` a déroulé téléchargement des binaires, auth par clé, forçage DERP et
+`serve` en ~36 s à froid, sans intervention — première exécution de bout en bout du mécanisme
+du §3 ter dans une VM neuve, sous `pxl-console` (le défaut du script).
+
+- Renommage demandé par la mission : `tailscale logout` puis `TS_HOSTNAME=claude-vm-pxl-tape
+  bash tunnel_up.sh` (la manœuvre du §3 ter) → **`claude-vm-pxl-tape-1.tailaee5f.ts.net`** ·
+  `100.70.195.54` · `tag:pxl-vm` · relais home `par` (région 18, forcée par §4 bis).
+- ⚠️ Le suffixe `-1` est la **contre-épreuve du renommage à chaud de la session jumelle**
+  (ci-dessus) : elle avait pris `claude-vm-pxl-tape` nu vers 07:16, mon enregistrement de
+  07:20 a trouvé le nom occupé. Le `HostName` s'affiche nu (`claude-vm-pxl-tape`) mais le
+  `DNSName` garde `-1` — exactement le comportement figé du §3 ter. Les deux lectures se
+  complètent : renommage vers un nom **libre** → le DNSName suit ; enregistrement sur un nom
+  **pris** → `-1` pour la vie du nœud.
+- ⚠️ Le nœud jumeau (`100.71.98.107`) n'apparaît **pas** dans ma liste de pairs quelques
+  minutes après — évaporé avec sa VM (éphémère), ou masqué par l'ACL entre nœuds tagués :
+  non départagé, et un `-1` à 07:20 prouve seulement que le nom était pris *à cet instant-là*.
+- ⚠️ Console 8710 morte ici aussi, pour une cause différente de la jumelle : le hook lance
+  `node /home/user/PXL-Switcher/console/server.mjs` et **ce dépôt n'est pas dans cette VM**
+  (`MODULE_NOT_FOUND`). `serve` publié quand même — non bloquant.
+
 ---
 
 ## 4. ⭐ GitHub : deux couches d'application, et ce qu'elles refusent
