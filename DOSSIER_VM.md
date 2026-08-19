@@ -120,18 +120,29 @@ CA bundle en `/root/.ccr/ca-bundle.crt`, `NODE_EXTRA_CA_CERTS` déjà pointé de
 > Ce n'est donc pas un simple tunnel : c'est un **point d'application de politique**, qui
 > connaît le périmètre de la session. Retenir la formulation — elle explique le §4.
 
-> ⭐ **La politique d'egress est PAR ENVIRONNEMENT, pas par VM** (mesuré le 19/08). La même
-> opération — joindre Tailscale — passe dans « PXL Cloud All-Access ⚠️ » (session du 03/08,
-> branche `claude/pxl-switcher-tailscale-vm-test-nd2ier`) et rend `CONNECT 403` sur
-> `pkgs.tailscale.com` **et** `controlplane.tailscale.com` dans « PXL cloud ». Le marqueur :
-> `recentRelayFailures` avec `connect_rejected … policy denial`. Aucun code ne contourne ça —
-> c'est le réglage réseau de l'environnement (claude.ai/code → nuage → roue dentée), et il ne
-> touche que les sessions **ouvertes après** le changement.
+> 🔴🔴 **ERRATUM MAJEUR (19/08) : la règle « par port » du §3 bis (02/08) est OBSOLÈTE — la
+> couche d'egress est devenue une passerelle TLS interceptante à liste d'hôtes.** Mesuré dans le
+> MÊME environnement que le 03/08 :
 >
-> Contournement partiel mesuré : quand seul le TÉLÉCHARGEMENT est bloqué (`pkgs.tailscale.com`),
-> `go install tailscale.com/cmd/tailscale{,d}@v1.98.10` compile les binaires en ~3 min via
-> `proxy.golang.org` (dans la `noProxy`, donc toujours ouvert — Go 1.24.7 préinstallé). Mais si
-> `controlplane.tailscale.com` est fermé, le nœud ne s'authentifiera jamais : inutile d'insister.
+> - en dial **direct** (hors `HTTPS_PROXY`), `controlplane.tailscale.com:443` connecte en 4 ms
+>   (impossible pour la vraie côte Est — c'est un intercepteur local) et rend **HTTP 403** avec
+>   un certificat émis par **`O=Anthropic, CN=Egress Gateway SDS Issuing CA (production)`** ;
+> - le corps du 403 dit tout : *« Host not in allowlist: controlplane.tailscale.com. **Add this
+>   host to your network egress settings** to allow access. »* ;
+> - témoins : `pypi.org` direct → 200 ; `example.com` direct → 403. **Filtrage par HÔTE, plus
+>   par port.** Les relais DERP (`derp*.tailscale.com:443`) sont 403 au même titre — le repli
+>   DERP-sur-443 du §3 bis ne contourne plus rien, la couche du dessous lit désormais le SNI.
+>
+> ⇒ Le remède n'est PAS du code : ajouter `*.tailscale.com` (au minimum `controlplane.` +
+> `derp*.` + `log.`) dans **Network egress settings** de l'environnement (claude.ai/code →
+> nuage → roue dentée). Le proxy de session, lui, refuse aussi (`connect_rejected … policy
+> denial` dans `recentRelayFailures`) — les deux étages obéissent au même réglage.
+>
+> Contournement partiel toujours valable : quand seul le TÉLÉCHARGEMENT est bloqué
+> (`pkgs.tailscale.com`), `go install tailscale.com/cmd/tailscale{,d}@v1.98.10` compile les
+> binaires en ~3 min via `proxy.golang.org` (dans la `noProxy`, donc toujours ouvert — Go
+> 1.24.7 préinstallé). Mais tant que `controlplane.tailscale.com` est refusé, le nœud ne
+> s'authentifiera jamais : inutile d'insister côté code.
 
 ---
 
