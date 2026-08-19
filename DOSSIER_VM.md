@@ -513,6 +513,63 @@ d'admin, donc une policy catastrophique se corrige depuis le navigateur.
 
 ---
 
+## 3 quater. 🔴 L'allowlist d'hôtes est revenue — et le réglage d'environnement n'a pas atteint la session (mesuré le 19/08/2026)
+
+Mission du jour : monter le nœud Tailscale de la VM. **Résultat : nœud NON monté, arrêt à la
+sonde d'egress.** Mais la sonde a mesuré trois choses qui valent la panne.
+
+### ⭐ Troisième état du filtre d'egress : une passerelle TLS qui filtre PAR HÔTE
+
+Le §3 bis notait déjà que la politique réseau est un réglage d'environnement, avec deux états
+observés : allowlist d'hôtes le 01/08, hôtes arbitraires relayés le 02/08. Le 19/08 en montre un
+**troisième**, plus instrumenté que le premier :
+
+| Mesure 19/08 | Résultat |
+|---|---|
+| `curl --noproxy '*' https://controlplane.tailscale.com/key?v=138` (dial « direct », 443) | **HTTP 403** en ~40 ms, corps explicite : `Host not in allowlist: controlplane.tailscale.com. Add this host to your network egress settings to allow access.` |
+| Même cible via `$HTTPS_PROXY` | `curl: (56) CONNECT tunnel failed, response 403` |
+| Certificat présenté sur le dial « direct » | `CN=*.tailscale.com`, mais **issuer `O=Anthropic; CN=Egress Gateway SDS Issuing CA (production)`** |
+| `github.com` (le `git fetch` du début de session) | ✅ passe |
+| `recentRelayFailures` après ces 403 | **`[]`** — l'angle mort de l'errata 6, reconfirmé |
+
+> ⭐ **Il n'y a plus de « hors proxy ».** Le 02/08, contourner `HTTPS_PROXY` en dial direct
+> donnait le filtre de ports nu (§3 bis). Le 19/08, le dial direct en 443 aboutit sur une
+> **passerelle TLS Anthropic qui termine la connexion elle-même** : elle forge un certificat au
+> nom de l'hôte visé (signé par la CA du bundle `/root/.ccr/`, présente dans le store système,
+> d'où un `curl` sans `-k` qui passe), lit le SNI, et répond 403 avec le nom de l'hôte refusé.
+> Le message dit le mécanisme : le filtrage est **par hôte**, configurable par l'utilisateur
+> (« your network egress settings »), et s'applique **aux deux chemins** — proxy et direct.
+
+### 🔴 Le réglage ajouté par Eliott n'a pas atteint cette session
+
+Contexte de la mission : Eliott venait d'ajouter `*.tailscale.com` aux Network egress settings
+de l'environnement, et `TS_AUTHKEY` aux variables. **Cette session, pourtant démarrée après,
+ne voit ni l'un ni l'autre** : le 403 ci-dessus, et `TS_AUTHKEY` absent de l'environnement
+(vérifié sans afficher de valeur ; le hook `SessionStart` l'avait déjà signalé à 07:12).
+
+Deux hypothèses, **non départagées** — les écrire toutes les deux est la leçon de l'errata 1 :
+
+1. *(a)* allowlist **et** variables sont photographiées à un instant antérieur au réglage —
+   VM provisionnée avant, ou propagation différée côté Anthropic ;
+2. *(b)* le réglage n'a pas été enregistré ou ne s'applique pas à cet environnement-ci
+   (plusieurs environnements existent, le réglage est par environnement).
+
+Le fait que **les deux** réglages manquent **ensemble** penche vers une photographie unique
+prise trop tôt *(a)* — cohérent avec le §3 ter (« une variable ne prend effet qu'à la NAISSANCE
+d'une VM ») étendu à l'allowlist — mais ne prouve rien contre *(b)*. ⇒ **Prochain essai : une
+session neuve, ouverte nettement après le réglage, qui relance la même sonde avant toute autre
+chose.** Si le 403 persiste, c'est *(b)*, et c'est le réglage qu'il faut inspecter, pas la VM.
+
+### ⚠️ Méta : le relevé du 19/08 de la session précédente n'a jamais été poussé
+
+La mission faisait référence à un « erratum du 19/08 » établissant la passerelle par hôte.
+**Aucune trace dans le dépôt** — la session qui l'a établi ne l'a pas poussé, et son relevé
+est perdu avec sa VM. La règle « push = survie » (§2) ne souffre aucune exception, y compris
+pour les sessions qui documentent la règle. Le présent paragraphe reconstruit le constat à
+partir de mesures refaites, pas du souvenir.
+
+---
+
 ## 4. ⭐ GitHub : deux couches d'application, et ce qu'elles refusent
 
 Il n'y a **pas de `gh` CLI**. Deux chemins seulement, et **ils n'ont pas les mêmes droits** :
