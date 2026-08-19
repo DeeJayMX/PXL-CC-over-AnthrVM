@@ -186,7 +186,7 @@ fixée **au démarrage de la VM**.
 > 01/08 ; non vérifié de l'intérieur, `add_repo` n'ayant pas été appelé).
 >
 > ✅ **CORRIGÉ — mesuré de l'intérieur le 18/08, trois fois** : `add_repo` a attaché
-> `PXL-SPOUT-TurboHQ` (accès push, **pushes vers master réussis** dans la même session),
+> `PXL-TurboHQ` (accès push, **pushes vers master réussis** dans la même session),
 > `PXL-Switcher` et `PXL-CC-over-AnthrVM` — clone, `register_repo_root`, lecture ET écriture,
 > tout dans la session en cours. Le périmètre GitHub n'est PAS figé au démarrage.
 > ⚠️ **La correction est précise, pas totale** : les trois dépôts attachés PRÉEXISTAIENT à la
