@@ -568,6 +568,40 @@ est perdu avec sa VM. La règle « push = survie » (§2) ne souffre aucune exce
 pour les sessions qui documentent la règle. Le présent paragraphe reconstruit le constat à
 partir de mesures refaites, pas du souvenir.
 
+### ⭐ 19/08, seconde session : hypothèse *(b)* tranchée — les réglages réseau sont PAR ENVIRONNEMENT (mesuré le 19/08/2026)
+
+Le « prochain essai » ci-dessus a eu lieu le jour même, mais dans un **autre environnement** :
+la session du matin tournait dans « PXL cloud », celle-ci dans « PXL Cloud All-Access ⚠️ ».
+Résultat : **c'était *(b)*** — le réglage ne s'applique qu'à l'environnement où il est posé.
+Ce que chaque environnement voyait, à quelques heures d'écart, même dépôt, même mission :
+
+| Mesure | « PXL cloud » (matin) | « PXL Cloud All-Access ⚠️ » (cette session) |
+|---|---|---|
+| `TS_AUTHKEY` | absent | **présent** (61 caractères, non affichée) |
+| `curl --noproxy '*' https://controlplane.tailscale.com/key?v=138` | 403 `Host not in allowlist` | **200**, JSON des clés publiques, ~100 ms |
+| `https://example.com/` (hôte sans rapport) | *(non sondé)* | **200** — donc pas d'allowlist restrictive ici, pas seulement `*.tailscale.com` ajouté |
+
+> ⭐ **La passerelle TLS Anthropic est là dans LES DEUX cas.** Même sur la connexion qui
+> *réussit*, l'issuer du certificat de `controlplane.tailscale.com` est
+> `O=Anthropic, CN=Egress Gateway SDS Issuing CA (production)` (mesuré à l'`openssl s_client`).
+> All-Access ne retire pas la passerelle : il change sa **politique** (relayer au lieu de 403).
+> Tout l'egress reste terminé-réinspecté ; Tailscale traverse ce MITM parce que la CA Anthropic
+> est dans le store système — control plane comme DERP parlent TLS standard en 443.
+
+**Le nœud est monté** (mission accomplie, contrairement au matin) :
+
+- `claude-vm-pxl-tape.tailaee5f.ts.net` · `100.71.98.107` · `tag:pxl-vm` · relais home `par`
+  (région 18, forcée par `tunnel_up.sh` §4 bis ; elle était déjà `par` avant le forçage, le seul
+  pair en ligne y étant).
+- ⚠️ Fait daté qui **contraste avec le §3 ter** : le hook avait enregistré le nœud sous
+  `pxl-console` ; un **renommage à chaud** `tailscale set --hostname=claude-vm-pxl-tape` a fait
+  suivre le `DNSName` en quelques secondes, sans suffixe `-1` et sans logout. Le DNSName figé du
+  §3 ter concernait la **reprise d'un nom d'homonyme supprimé** — un renommage vers un nom libre,
+  lui, se propage. Deux situations, deux comportements ; ne pas généraliser l'un à l'autre.
+- ⚠️ La console ne répondait pas sur 8710 (`curl` local → connexion refusée, le hook l'avait
+  signalé à 07:16) ; `serve` a été publié quand même — l'URL existera dès qu'un processus
+  écoutera. Non bloquant, conforme à la mission.
+
 ---
 
 ## 4. ⭐ GitHub : deux couches d'application, et ce qu'elles refusent
