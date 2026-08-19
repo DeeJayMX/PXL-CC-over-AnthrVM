@@ -120,6 +120,19 @@ CA bundle en `/root/.ccr/ca-bundle.crt`, `NODE_EXTRA_CA_CERTS` déjà pointé de
 > Ce n'est donc pas un simple tunnel : c'est un **point d'application de politique**, qui
 > connaît le périmètre de la session. Retenir la formulation — elle explique le §4.
 
+> ⭐ **La politique d'egress est PAR ENVIRONNEMENT, pas par VM** (mesuré le 19/08). La même
+> opération — joindre Tailscale — passe dans « PXL Cloud All-Access ⚠️ » (session du 03/08,
+> branche `claude/pxl-switcher-tailscale-vm-test-nd2ier`) et rend `CONNECT 403` sur
+> `pkgs.tailscale.com` **et** `controlplane.tailscale.com` dans « PXL cloud ». Le marqueur :
+> `recentRelayFailures` avec `connect_rejected … policy denial`. Aucun code ne contourne ça —
+> c'est le réglage réseau de l'environnement (claude.ai/code → nuage → roue dentée), et il ne
+> touche que les sessions **ouvertes après** le changement.
+>
+> Contournement partiel mesuré : quand seul le TÉLÉCHARGEMENT est bloqué (`pkgs.tailscale.com`),
+> `go install tailscale.com/cmd/tailscale{,d}@v1.98.10` compile les binaires en ~3 min via
+> `proxy.golang.org` (dans la `noProxy`, donc toujours ouvert — Go 1.24.7 préinstallé). Mais si
+> `controlplane.tailscale.com` est fermé, le nœud ne s'authentifiera jamais : inutile d'insister.
+
 ---
 
 ## 4. ⭐ GitHub : deux couches d'application, et ce qu'elles refusent
