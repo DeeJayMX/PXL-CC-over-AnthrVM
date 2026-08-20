@@ -141,7 +141,9 @@ même environnement :
 - **Dans la VM** : aucun démon de temps (ni chronyd, ni ntpd, ni systemd-timesyncd — pas de
   systemd tout court), pas de `/dev/ptp*`, pas de chargement de module possible (`modprobe`
   absent) donc pas de `ptp_kvm` pour lire l'horloge de l'hyperviseur. Clocksource `tsc`
-  (`kvm-clock` disponible mais non utilisé). L'horloge est posée au boot puis **dérive seule**.
+  (`kvm-clock` disponible mais non utilisé). L'horloge est posée au boot puis **dérive seule**
+  — et vite : **~125 ppm mesurés** sur l'une des trois VM (≈ 11 s/jour), par suivi d'offset
+  min-RTT sur 40 min.
 - **Vers l'extérieur** : aucune heure vraie atteignable — NTP public (UDP 123) bloqué par
   l'egress, NTS (TCP 4460) bloqué, et l'en-tête `Date` HTTPS à travers le proxy vaut entre
   ±150 ms et ±0,5 s avec des sources qui se **contredisent** (google et github : intervalles
@@ -416,6 +418,12 @@ ce qui a été fait sur `pxl-airlink` le 01/08.
    depuis le web si. La sonde du 19/08 mesurait donc probablement un ajout fait au mobile.
    **Leçon : « la config est figée » était encore un énoncé plus large que sa mesure — le
    chemin par lequel une config est modifiée fait partie des variables de l'expérience.**
+   *Résidu du 20/08 :* la propagation web-en-direct n'est pas non plus uniforme — sur trois
+   VM du même environnement, deux ont vu l'ouverture immédiatement, la troisième est restée
+   en 403 **y compris après une re-sauvegarde** de l'environnement (re-testé 2×, 09:25:35Z).
+   Aucune variable discriminante identifiée (même env, sessions du même matin). À re-mesurer
+   au prochain recyclage de cette VM ; d'ici là, l'énoncé honnête est « s'applique en direct
+   *souvent*, pas toujours ».
 
 ---
 
