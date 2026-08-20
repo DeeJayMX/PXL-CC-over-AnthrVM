@@ -133,6 +133,29 @@ Dernier commit de la nuit : 23:48Z. Ce que la nuit enseigne, dans l'ordre des d�
   binaires Go, clones, `tailscaled.state` et sondes `.idx` de la nuit étaient encore là — le
   post-mortem est possible parce que les sondes écrivaient **sur disque**, pas en mémoire.
 
+### ⏰ L'horloge de la VM — livrée à elle-même (sondé le 20/08, 3 VM)
+
+**La wall-clock d'une VM n'est disciplinée par rien.** Sondes concordantes sur trois VM du
+même environnement :
+
+- **Dans la VM** : aucun démon de temps (ni chronyd, ni ntpd, ni systemd-timesyncd — pas de
+  systemd tout court), pas de `/dev/ptp*`, pas de chargement de module possible (`modprobe`
+  absent) donc pas de `ptp_kvm` pour lire l'horloge de l'hyperviseur. Clocksource `tsc`
+  (`kvm-clock` disponible mais non utilisé). L'horloge est posée au boot puis **dérive seule**.
+- **Vers l'extérieur** : aucune heure vraie atteignable — NTP public (UDP 123) bloqué par
+  l'egress, NTS (TCP 4460) bloqué, et l'en-tête `Date` HTTPS à travers le proxy vaut entre
+  ±150 ms et ±0,5 s avec des sources qui se **contredisent** (google et github : intervalles
+  disjoints — granularité 1 s + latence proxy asymétrique).
+- **Conséquence mesurée** : étalement de **~0,3 s entre trois VM** du même environnement
+  (offsets muraux mesurés min-RTT : +74,5 ms entre les deux labos, −277 ms tour↔labo, miroirs
+  vérifiés à 1 ms près dans les deux sens). Toute comparaison de timestamps muraux entre VM
+  est donc **fausse de dizaines à centaines de ms** — les latences aller simple inter-VM
+  n'ont aucun sens sans correction (on a mesuré des latences *négatives*).
+- **La parade** : une synchro applicative maître/mesh (offset NTP-lite min-RTT sur
+  `/api/time`, ±0,5 ms en local, ±rtt/2 en relayé) — spec `CLOCK.md` et classement complet
+  des sources d'heure dans `PXL-TurboHQ/pxl-turbohq-client/` (`CLOCK_SOURCES.md`). Les
+  mesures aller-retour (RTT/2), elles, restent justes sans rien : une seule horloge mesure.
+
 ---
 
 ## 3. Le réseau — un proxy qui n'est pas qu'un proxy
