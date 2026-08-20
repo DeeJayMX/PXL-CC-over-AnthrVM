@@ -293,5 +293,45 @@ commande ; 2× = 72 Mbit/s suffit à tout film).
 
 ---
 
+## Annexe B — La filière Sony BDP-CX7000ES / BDP-CX960 (relevé du 2026-08-20)
+
+*(ajouté en réponse à « le CX7000ES, c'est ça que je veux — moyen de le faire moins cher ? »)*
+
+Sony a construit l'objet cible : **BDP-CX7000ES** (2009), changeur **400 Blu-Ray** d'usine,
+et son jumeau non-ES **BDP-CX960** (même carrousel, ~85 % du produit). Jamais distribués en
+Europe — marché de l'occasion US uniquement.
+
+**Prix relevés (mesuré, marché US, 2026-08-20)** — ces chiffres datent vite, les re-relever :
+CX7000ES testé : 900–1000 $ (US Audio Mart ×2, eBay). CX960 testé : 595–1080 $. Tendance
+haussière année après année. Livré en France (port ~15 kg : 150–250 € + TVA/droits ~20 %) :
+**~1300–1600 € pour un CX7000ES, ~1000–1400 € pour un CX960.**
+
+**Trois chausse-trappes d'un exemplaire fonctionnel importé** : 120 V (transformateur à
+demeure) · **zone A** — les BD français sont zone B, beaucoup de titres sont multi-zones mais
+pas tous · **ne streame pas** : sortie HDMI seulement ; l'amener au cahier des charges
+« téléphone » exige capture HDMI (HDCP à contourner ⚠️) + pilotage RS-232, ~200 € et une
+qualité ré-encodée.
+
+**Les trois filières, classées :**
+
+1. **Greffe CX355 (~500–700 €)** — la moins chère, et fonctionnellement *supérieure* à
+   l'original pour l'objectif : streaming natif, lecteur LibreDrive insensible aux zones,
+   230 V, pièces remplaçables. Perd 100 slots et le fini d'usine. **Voie de référence.**
+2. ⭐ **CX960 « as-is / for parts » comme donneur** — les épaves partent bien sous les prix
+   « tested » (supposé, à chiffrer à l'achat). Or la greffe **jette précisément les deux
+   organes qui pannent** (carte mère bypassée, bloc de lecture remplacé) : un CX960 mort est
+   un *meilleur donneur* que le CX355 — carrousel 400 disques conçu d'origine pour des BD —
+   et le bypass neutralise du même coup le 120 V et la zone A. Risques : port US cher, état
+   mécanique = loterie. **Tout le présent dossier s'applique à l'identique à ce châssis** ;
+   si l'occasion se présente, le projet migre sans réécriture.
+3. **CX7000ES/CX960 fonctionnel importé (1000–1600 €)** — le plus cher et le moins bon pour
+   « ses films partout » (il faut quand même greffer une chaîne de capture). À réserver au
+   cas où l'objet d'usine est le but en soi.
+
+Sources du relevé : usaudiomart.com (annonces 650042804, 650180507, 649686763),
+ebay.com (1408732729, 127981795383), ntc-tech.com (CX960 as-is).
+
+---
+
 *Pré-dev rédigé le 2026-08-20. Prochain geste : P0/T5 — la chaîne logicielle se valide sans
 toucher un tournevis.*
