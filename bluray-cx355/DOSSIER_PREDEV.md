@@ -82,6 +82,10 @@ directement sur la broche du lecteur BD**.
   (capteurs discrets vs rouleaux entraînés).
 - Choix du lecteur : privilégier un modèle flashable **LibreDrive** (famille LG WH16NS40 /
   BU40N slim) — lecture sans entrave des BD et UHD via MakeMKV, très documenté.
+- ⭐ **2026-08-20 — le format se tranche à la mécanique du moyeu, pas à l'encombrement** :
+  voir l'annexe A. Le demi-hauteur (disque *posé* + palet magnétique) reproduit le geste du
+  CX355 ; le slim (moyeu à clips, pression au clic / arrachage) exigerait un presseur et un
+  décolleur en plus. Le demi-hauteur devient la voie de référence, le slim un repli de T2.
 
 ### Option B — le bras de transfert : lecteur slot-in externe intact
 
@@ -242,6 +246,50 @@ CDP-CX355 d'occasion (50–150 €) · kit courroies (15 €) · lecteur BD Libr
 drivers moteur + petites fournitures (30 €) · alim labo pour l'établi (déjà possédée ou 60 €) ·
 licence MakeMKV (~60 €, la bêta gratuite suffit pour T3/T5) · SSD cache 4 To ou HDD 12 To selon
 mode (180–250 €).
+
+---
+
+## Annexe A — Mécanique d'un lecteur : pourquoi le demi-hauteur gagne « par le haut »
+
+*(ajouté le 2026-08-20, en réponse à « un lecteur style laptop, ouverture par le haut ? »)*
+
+Deux familles de lecteurs, deux façons opposées d'accrocher le disque à la broche :
+
+```
+SLIM (laptop, 9,5/12,7 mm)              DEMI-HAUTEUR (bureau, 5"1/4)
+tout le mécanisme est SUR le tiroir     mécanisme au fond du boîtier
+(broche, laser, chariot sortent avec)   disque POSÉ librement sur la broche
+
+   moyeu à clips (billes à ressort)        palet magnétique logé dans le capot
+        ┌─── clic ! ───┐                        ▼ posé sur le disque
+   disque PRESSÉ (~10 N) au chargement     disque tenu par attraction avec
+   disque ARRACHÉ au déchargement          l'aimant de la broche — gravité + aimant
+```
+
+- **Slim** : fonctionne très bien « à nu », tiroir ouvert — mais le moyeu à clips exige une
+  *pression au clic* pour charger et un *arrachage* pour décharger. L'ascenseur du CX355 sait
+  poser et reprendre, pas presser ni arracher : il faudrait ajouter un presseur motorisé **et**
+  un décolleur. Deux mécanismes de plus, deux sources de bourrage.
+- **Demi-hauteur** : le disque *repose* sur la broche, le palet magnétique le plaque depuis le
+  dessus. **C'est exactement le geste que le CX355 fait déjà** avec son propre clamp sur sa
+  broche CD. La greffe se réduit à un problème d'alignement et de cotes (T2), pas de mécanisme.
+
+**Recette de mise à nu d'un demi-hauteur à tiroir** (c'est le mode opératoire de T3) :
+
+1. Capot retiré ; **conserver le palet magnétique** (réutilisé tel quel, ou remplacé par le
+   clamp d'origine du CX355 si les cotes s'y prêtent — à trancher en T2).
+2. Fermer le tiroir actionne une **glissière-came** qui soulève le mécanisme en position de
+   lecture ; tiroir retiré, **bloquer cette came en « fermé »** — la broche reste haute en
+   permanence.
+3. **Ponter le microswitch « tiroir fermé »** : le lecteur se croit fermé pour toujours.
+4. Disque posé main + palet + SATA/USB → `makemkvcon info disc:0` doit voir le BD.
+5. ⚠️ Seul vrai inconnu du leurrage : beaucoup de firmwares ne re-détectent un *nouveau*
+   disque qu'au cycle tiroir. Le déclencher en logiciel (`eject -t /dev/sr0` / commande ATA
+   start-stop) — le moteur de tiroir brassera du vide, sans conséquence. À valider en T3.
+
+Réserves d'intégration (supposé) : **poussière** (lecteur décapoté dans un châssis de
+changeur ⇒ prévoir un carter léger) et **vibrations** (brider la vitesse de lecture par
+commande ; 2× = 72 Mbit/s suffit à tout film).
 
 ---
 
