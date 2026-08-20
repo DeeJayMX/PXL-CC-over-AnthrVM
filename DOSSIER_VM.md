@@ -91,6 +91,47 @@ mauvaise opération.
 4. **Diagnostic d'identité** : `probes/vm_survey.sh --canary` en début de session. Le canari
    présent ⇒ workdir survivant ; absent ⇒ VM neuve.
 5. Le **scratchpad** sert de boîte noire trans-VM (logs d'expérience, artefacts de session).
+6. **Nuit ou absence longue** (20/08) : armer les réveils **avant** — une Routine de garde
+   auto-réarmante (~45 min) par session, plus, chez un orchestrateur, **un trigger de réveil
+   par session pilotée** (voir la nuit du 19-20/08 ci-dessous : c'est le seul mécanisme qui a
+   ressuscité le banc). Accepter d'avance la perte de tout état en mémoire.
+
+### 🌙 La nuit du 19-20/08 — l'endurance multi-VM, mesurée en vraie grandeur
+
+Le banc : trois VM (une tour d'orchestration + deux labos), des flux vidéo permanents en
+duplex croisé sur le tailnet, mission « rien ne s'arrête jusqu'au matin ». Résultat brut :
+**les trois conteneurs sont morts dans la première heure** (labo A ~23:45Z, labo B ~00:20Z,
+la tour coupée en plein tour vers 23:46Z) et rien n'a tourné jusqu'au réveil manuel à 06:10Z.
+Dernier commit de la nuit : 23:48Z. Ce que la nuit enseigne, dans l'ordre des dégâts :
+
+- **Les nœuds tailscale éphémères meurent DEUX fois.** Un nœud hors ligne est *supprimé* du
+  tailnet (clé éphémère) — et une longue absence **expire l'enregistrement** : au retour, le
+  nœud est *logged out* et la configuration `tailscale serve` est **effacée**. Le remontage
+  n'est donc jamais « relancer tailscaled » : c'est `tailscale up --authkey` complet + re-`serve`.
+  Procédure scriptée dans `PXL-TurboHQ` (branche transport-lab, `lab/remount_a.sh`).
+  L'état local (`tailscaled.state`) survivant dans le workdir redonne la **même IP** — seuls
+  l'enregistrement côté plan de contrôle et le serve expirent.
+- **Une tâche suivie par le harnais ne maintient PAS le conteneur en vie une nuit.** La tour
+  avait un Monitor persistant actif : son conteneur a redémarré quand même. La règle 2 protège
+  la *sémantique* (notification, reprise) — pas la machine. L'ancienne note « `run_in_background`
+  = VM maintenue ≥ 1 h » est un ordre de grandeur, pas un contrat, et ne s'étend pas à 6 h.
+- **Un tour peut enjamber un redémarrage — avec des heures au milieu.** Le tour de 23:46Z de la
+  tour a été coupé après son premier appel d'outil (parti à 23:46) ; à la reprise de session,
+  les appels restants ont exécuté à **06:10Z**. Les actions d'un même tour ne sont pas
+  simultanées : écrire les enchaînements critiques de façon idempotente, et dater ce qu'on
+  envoie (un « ordre de nuit » livré au matin sème la confusion).
+- **Les tours déclenchés par trigger n'ont pas les outils MCP** (confirmé en vraie grandeur) :
+  une session réveillée par Routine ne peut pas armer son propre `send_later` dans ce tour-là.
+  Parade des labos : garde-fou en tâche harnais (une mort du process réveille la session) et
+  `send_later` armé depuis un tour *interactif*. Piège supplémentaire vu au matin : une demande
+  d'**approbation MCP** en attente bloque silencieusement le `send_later` d'une session — le
+  garde-fou qu'on croit armé ne l'est pas.
+- **Ce qui a marché** : la chaîne de résurrection côté serveur. Le watchdog mutuel des labos a
+  daté les chutes ; la tour tenait **un trigger de réveil pré-créé par session** (créés avant la
+  nuit, prompt de remontage complet) ; deux `fire_trigger` au matin ont tout relevé en ~15 min,
+  y compris après un second recyclage du labo A à ~06:15Z. Et le workdir a tenu sa promesse :
+  binaires Go, clones, `tailscaled.state` et sondes `.idx` de la nuit étaient encore là — le
+  post-mortem est possible parce que les sondes écrivaient **sur disque**, pas en mémoire.
 
 ---
 
