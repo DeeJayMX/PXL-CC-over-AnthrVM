@@ -407,6 +407,16 @@ ce qui a été fait sur `pxl-airlink` le 01/08.
    changer entre le 01/08 et le 18/08 — les deux mesures peuvent avoir été justes chacune à sa
    date ; c'est indécidable rétroactivement, et c'est une raison de plus de dater tout.
 
+7. ❌ **« Les réglages egress sont figés au démarrage de la session. »** (19/08, appuyé sur une
+   sonde de 10 min restée en 403 après un ajout d'allowlist) Mesuré le 20/08 : **un ajout fait
+   depuis l'interface WEB s'applique EN DIRECT aux sessions vivantes** — `pkgs.tailscale.com`
+   puis trois hôtes d'heure sont passés de 403 à 200 en pleine session, sans redémarrage.
+   Explication d'Eliott (à re-vérifier proprement un jour) : le comportement dépend de
+   l'INTERFACE — un changement depuis l'appli mobile ne se propage pas aux sessions en cours,
+   depuis le web si. La sonde du 19/08 mesurait donc probablement un ajout fait au mobile.
+   **Leçon : « la config est figée » était encore un énoncé plus large que sa mesure — le
+   chemin par lequel une config est modifiée fait partie des variables de l'expérience.**
+
 ---
 
 ## 9. Sources
