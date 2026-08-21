@@ -333,5 +333,50 @@ ebay.com (1408732729, 127981795383), ntc-tech.com (CX960 as-is).
 
 ---
 
+## Annexe C — La plateforme : un châssis, deux produits (ajouté le 2026-08-20)
+
+*(en réponse à « un CX960 Video qui streame + un CX960 Informatique en cold storage BD-RW »)*
+
+Le projet devient une **plateforme** : châssis CX960 (ou CX355) + bypass carte mère + greffe
+d'un graveur LibreDrive + serveur x86 embarqué — et deux personnalités logicielles au-dessus.
+⭐ Les deux variantes partagent ~90 % du développement, et le même bloc optique : le
+WH16NS40 est un *graveur* — il lit les films de l'une et grave les archives de l'autre. Le
+robot de gravure de la variante Informatique est aussi le robot d'ingestion de la Video.
+
+### Variante « Video » — le jukebox streamer
+
+Découpage client/serveur tranché (2026-08-20) :
+
+- **Serveur — dans le châssis** : carte x86 N100 (la place libérée par la carte mère Sony
+  suffit — à coter en T2), sortie Ethernet. Porte l'interface web, l'inventaire, le pilotage
+  robot et **le transcodage** (QuickSync). Le transcodage ne va pas sur un SoC Android :
+  encodeurs médiocres, et MakeMKV/ffmpeg sont natifs x86.
+- **Clients — rien à développer** : la « super interface » est une appli web/PWA (mur de
+  jaquettes, animation du carrousel pendant les 30–60 s de chargement) + l'écosystème
+  Jellyfin existant. Une box Android du commerce à 30 € devient un client TV parmi d'autres —
+  elle n'est **pas un composant du produit**, et aucun hardware client n'est à maintenir.
+
+### Variante « Informatique » — la baie d'archives optique
+
+Le concept est validé à l'échelle industrielle (⭐ Facebook, baies Blu-Ray robotisées en
+datacenter ~2014 ; Sony Optical Disc Archive). Trois décisions :
+
+1. **BD-R, pas BD-RE.** ⚠️ Le réinscriptible (changement de phase) vieillit moins bien que le
+   BD-R HTL et coûte plus cher ; pour de l'archivage, le write-once est une *qualité*
+   (immuabilité, anti-ransomware). Étagement : **BD-R** courant (~1 €/25 Go) · **M-DISC**
+   pour les données critiques · un petit pool BD-RE réinscriptible en tampon, au besoin.
+2. **L'économie brute perd contre le HDD, l'assumer** (calculé) : 400 slots = 10 To en simple
+   couche, 20 To en DL, 40 To en BDXL 100 Go — soit ~40 €/To média contre ~20 €/To en disque
+   dur. La valeur est ailleurs : média hors-ligne, immuable, sans usure au repos.
+3. ⭐ **La fonction phare est le scrubbing** — ce que l'archivage optique amateur n'a jamais
+   eu : relecture planifiée de disques tirés au hasard, vérification des checksums, alerte
+   avant perte. Avec parité par volume (PAR2/dvdisaster) et catalogue dans le même serveur
+   d'inventaire que la Video. C'est l'argument qui justifie la variante.
+
+Débit de gravure (calculé) : BD-R 6× ≈ 27 Mo/s ⇒ ~15–20 min/disque de 25 Go — la baie grave
+et vérifie par lots, la nuit, en autonomie.
+
+---
+
 *Pré-dev rédigé le 2026-08-20. Prochain geste : P0/T5 — la chaîne logicielle se valide sans
 toucher un tournevis.*
