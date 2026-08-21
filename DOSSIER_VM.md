@@ -439,3 +439,35 @@ ce qui a été fait sur `pxl-airlink` le 01/08.
 **Documents PXL liés** — `PXL-Tape/v3/tests/investigations/note_vm_lifecycle.md` et
 `note_vm_webgpu.md` (les notes d'origine, dont ce dossier est la reprise et la correction) ·
 `PXL-StageBox/jpegxs-arm/README.md` (le banc dont le §1 explique la non-reproductibilité).
+
+## 🤝 « Rendez-vous plutôt que perçage » — le réseau inter-VM, doctrine (20/08)
+
+Question d'Eliott : mettre les IP des VM dans l'allowlist egress pour
+qu'elles se voient en direct ? **Non, trois verrous empilés** : (1)
+l'allowlist est un FILTRE de sorties (noms de domaine), pas un routeur —
+elle ne crée ni route ni écoute entrante ; (2) les conteneurs n'ont AUCUNE
+porte d'entrée (IP privées non routables, rien n'écoute de l'extérieur) ;
+(3) preuve empirique du 19/08 : le hole-punching tailscale — le meilleur
+chercheur de chemin direct du métier — a fait 0 % de direct, 100 % DERP sur
+toutes les paires. S'il existait un chemin, il l'aurait trouvé.
+
+**La doctrine qui en découle : on ne perce pas les murs, on se donne
+rendez-vous dehors.** Deux VM se « voient » via un point de rencontre
+extérieur qu'elles joignent chacune EN SORTANT — et l'allowlist est
+précisément la liste des lieux de rendez-vous autorisés. Trois
+incarnations, du plus bas au plus haut niveau :
+1. **DERP public Tailscale** (l'existant) : ~98 ms de plancher, files
+   partagées, zéro contrôle.
+2. **DERP À SOI sur le VPS OVH** (la recette prête pour le jour des clés) :
+   le binaire officiel `derper` sur le VPS (une heure d'install), son nom
+   de domaine dans l'allowlist (les clients DERP sortent en HTTPS/443 —
+   pile ce que le proxy sait autoriser), déclaré dans la DERP map du
+   tailnet (`derpMap` des ACL). Résultat : tout le trafic inter-VM passe
+   par SON relais — latence d'un VPS bien placé, bande passante à soi,
+   zéro changement dans les logiciels (tailscale route seul).
+3. **Relais applicatif sur le VPS** (TurboHQ/MBX — le « relais désigné »
+   du plan P2P) : mêmes propriétés au niveau flux.
+
+C'est le même théorème que toute la semaine : pas de chemin direct → élire
+un point de rencontre de qualité connue (le grandmaster pour l'heure, le
+relais pour les flux, le DERP à soi pour le tailnet).
