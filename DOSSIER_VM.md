@@ -684,6 +684,38 @@ recyclage parce qu'elle se **relance**, pas parce qu'elle dure.
    croit vivant est pire qu'un veilleur absent* (leçon de la nuit : « un banc qui doit durer se
    relance, il ne se suppose pas vivant »).
 
+### 🔴🔴 ERRATUM du 22/08, quatre heures après la rédaction ci-dessus — **la veille était AVEUGLE**
+
+La première version comptait les messages par `(j.messages ?? j.msgs ?? []).length`. **La boîte
+rend un TABLEAU NU.** Donc le compteur rendait **0 à chaque tour**, et la veille a tourné
+sereinement au-dessus de **cinq** messages — dont un d'Eliott qui nous appelait par notre nom.
+
+⭐ *Une veille qui ne peut pas voir son sujet ne dit pas « je ne vois rien », elle dit « il n'y a
+rien ».* Et ce silence-là se lit comme une bonne nouvelle : c'est **exactement** le motif 2 de
+`MISTAKE.md` (« un test qui ne peut pas trouver ce qu'il cherche »), appliqué à l'instrument même
+qu'on venait d'écrire pour ne rien rater.
+
+⚠️ **La forme n'avait jamais été MESURÉE** — elle avait été supposée, sur l'idée qu'une API rend
+un objet enveloppant. Une commande la donnait :
+
+```bash
+curl -s --noproxy '*' "http://127.0.0.1:8099/api/turbohq/mbx/<boîte>" | head -c 80
+# [{"ts":…,"from":"eliott","to":"all","text":"…","origin":"mbx-100.99.45.4-8080","seq":488}, …
+```
+
+**Trois corrections, et la troisième est celle qui vaut pour la suite :**
+
+1. Le compteur accepte le **tableau nu** comme l'objet enveloppant.
+2. Il distingue **« zéro message »** de **« je ne sais pas lire »** (`-1`) — et sur `-1` la veille
+   **rend la main en criant**, au lieu de veiller dans le vide. *Ne pas savoir n'est pas une bonne
+   nouvelle*, la règle du `POST_BUF_EMPTY` à −1 du dépôt d'à côté.
+3. ⭐⭐ **La veille porte son CONTRÔLE** : `bash mbx_veille.sh --controle` donne au compteur cinq
+   charges dont on connaît la réponse (tableau nu · boîte vide · objet · JSON illisible · forme
+   inconnue) et vérifie qu'il les sépare. Aucun réseau, une seconde. **Sabotage vérifié** : l'ancien
+   compteur rend `0` sur la forme réelle, donc le contrôle mord exactement là où il fallait.
+   ⚠️ Et la boucle appelle **la même fonction** — la recopier en ferait deux, et le contrôle ne
+   prouverait plus rien de ce qui tourne.
+
 ### Deux pièges concrets, déjà payés
 
 - ⚠️ **`pkill -f <motif>` TUE LE SHELL QUI L'APPELLE** quand le motif apparaît dans sa propre

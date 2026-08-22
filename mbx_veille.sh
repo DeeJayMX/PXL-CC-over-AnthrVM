@@ -53,6 +53,39 @@ mkdir -p "$(dirname "$JOURNAL")"
 
 dire() { printf '[%s] %s\n' "$(date -u +%H:%M:%S)" "$*" | tee -a "$JOURNAL"; }
 
+# ⭐⭐ **LE CONTRÔLE QUE LA VEILLE PORTE ELLE-MÊME** (22/08, après avoir tourné
+# aveugle au-dessus de cinq messages). Il n'interroge aucun réseau : il donne au
+# COMPTEUR trois charges dont on connaît la réponse, et vérifie qu'il les
+# distingue. Un banc sans contrôle intégré ne se trompe pas moins — il se trompe
+# sans le dire.
+#   bash mbx_veille.sh --controle
+compter() {
+  node -e '
+    let s=""; process.stdin.on("data",d=>s+=d).on("end",()=>{
+      try {
+        const j = JSON.parse(s);
+        const a = Array.isArray(j) ? j : (j.messages ?? j.msgs ?? null);
+        process.stdout.write(Array.isArray(a) ? String(a.length) : "-1");
+      } catch { process.stdout.write("-1"); } });' 2>/dev/null
+}
+if [ "${1:-}" = "--controle" ]; then
+  ec=0
+  essai() {   # nom · charge · attendu
+    r=$(printf '%s' "$2" | compter)
+    if [ "$r" = "$3" ]; then printf '✔ %s → %s\n' "$1" "$r"
+    else printf '✗ %s → %s (attendu %s)\n' "$1" "$r" "$3"; ec=1; fi
+  }
+  # 🔴 La forme RÉELLE de la boîte : un tableau NU. C'est celle que la première
+  #    version ne savait pas lire, et c'est donc le premier essai.
+  essai 'tableau nu de 2 messages' '[{"from":"a","text":"x"},{"from":"b","text":"y"}]' 2
+  essai 'boîte vide'               '[]'                                                0
+  essai 'objet {messages:[…]}'     '{"messages":[{"from":"a"}]}'                       1
+  # ⚠️ Et les deux formes d'IGNORANCE, qui ne doivent JAMAIS passer pour un zéro.
+  essai 'JSON illisible'           'Invalid channel name'                             -1
+  essai 'forme inconnue'           '{"ok":true}'                                      -1
+  exit "$ec"
+fi
+
 [ -x "$TS" ] || { dire "🔴 tailscale absent ($TS) — lancer tunnel_up.sh d'abord"; exit 0; }
 
 # ── Le pair, résolu par NOM. Une IP en dur périme au prochain enregistrement ;
@@ -102,10 +135,28 @@ while [ "$(date +%s)" -lt "$FIN" ]; do
   # 🔴 PEEK : pas de `?drain=1`. Rien n'est consommé ici.
   REP=$(curl -s --noproxy '*' --max-time 15 \
         "http://127.0.0.1:$PORT/api/turbohq/mbx/$BOITE" 2>/dev/null)
-  N=$(printf '%s' "$REP" | node -e '
-      let s=""; process.stdin.on("data",d=>s+=d).on("end",()=>{
-        try { const j=JSON.parse(s); process.stdout.write(String((j.messages??j.msgs??[]).length)); }
-        catch { process.stdout.write("0"); } });' 2>/dev/null)
+  # 🔴🔴 **LA BOÎTE REND UN TABLEAU NU, ET LA PREMIÈRE VERSION CHERCHAIT UN
+  # OBJET** (`j.messages ?? j.msgs ?? []`). Mesuré le 22/08 : la veille a tourné
+  # au-dessus de **cinq** messages — dont un d'Eliott qui nous appelait — en
+  # rendant 0 à chaque tour. *Une veille qui ne peut pas voir son sujet ne dit
+  # pas « je ne vois rien », elle dit « il n'y a rien ».*
+  # ⭐ La forme se **MESURE** (`curl … | node -e 'JSON.parse'`), elle ne se
+  # suppose pas — c'est la règle du dépôt d'à côté : *un témoin qui confirme
+  # l'hypothèse de celui qui l'a écrit ne prouve rien.*
+  # ⚠️ Et on distingue désormais **« zéro message »** de **« je ne sais pas
+  # lire »** : sans ça, un changement de forme côté relais rendrait la veille
+  # muette pour toujours, et le silence se lirait comme une bonne nouvelle.
+  # ⚠️ **UN SEUL compteur**, celui que `--controle` met à l'épreuve. Le recopier
+  # ici en ferait deux, et le contrôle ne prouverait plus rien de la boucle.
+  N=$(printf '%s' "$REP" | compter)
+
+  if [ "${N:-0}" = "-1" ]; then
+    dire "🔴 « $BOITE » a répondu quelque chose d'ILLISIBLE — la veille ne peut RIEN voir."
+    dire "   Forme attendue : un TABLEAU JSON de messages. Reçu (200 premiers octets) :"
+    dire "   ${REP:0:200}"
+    printf '%s\n' "$REP" >> "$JOURNAL"
+    exit 0                      # aveugle ⇒ on réveille la session, on ne veille pas dans le vide
+  fi
 
   if [ "${N:-0}" -gt 0 ] 2>/dev/null; then
     dire "📬 $N message(s) dans « $BOITE » — la boîte n'est PAS vidée, drainer au traitement :"
