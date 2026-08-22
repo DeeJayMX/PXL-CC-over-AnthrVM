@@ -513,7 +513,137 @@ d'admin, donc une policy catastrophique se corrige depuis le navigateur.
 
 ---
 
-## 3 quater. ⭐⭐ Veiller sur une boîte MBX depuis une VM (ajout du 22/08/2026)
+## 3 quater. 🔴 L'allowlist d'hôtes est revenue — et le réglage d'environnement n'a pas atteint la session (mesuré le 19/08/2026)
+
+Mission du jour : monter le nœud Tailscale de la VM. **Résultat : nœud NON monté, arrêt à la
+sonde d'egress.** Mais la sonde a mesuré trois choses qui valent la panne.
+
+### ⭐ Troisième état du filtre d'egress : une passerelle TLS qui filtre PAR HÔTE
+
+Le §3 bis notait déjà que la politique réseau est un réglage d'environnement, avec deux états
+observés : allowlist d'hôtes le 01/08, hôtes arbitraires relayés le 02/08. Le 19/08 en montre un
+**troisième**, plus instrumenté que le premier :
+
+| Mesure 19/08 | Résultat |
+|---|---|
+| `curl --noproxy '*' https://controlplane.tailscale.com/key?v=138` (dial « direct », 443) | **HTTP 403** en ~40 ms, corps explicite : `Host not in allowlist: controlplane.tailscale.com. Add this host to your network egress settings to allow access.` |
+| Même cible via `$HTTPS_PROXY` | `curl: (56) CONNECT tunnel failed, response 403` |
+| Certificat présenté sur le dial « direct » | `CN=*.tailscale.com`, mais **issuer `O=Anthropic; CN=Egress Gateway SDS Issuing CA (production)`** |
+| `github.com` (le `git fetch` du début de session) | ✅ passe |
+| `recentRelayFailures` après ces 403 | **`[]`** — l'angle mort de l'errata 6, reconfirmé |
+
+> ⭐ **Il n'y a plus de « hors proxy ».** Le 02/08, contourner `HTTPS_PROXY` en dial direct
+> donnait le filtre de ports nu (§3 bis). Le 19/08, le dial direct en 443 aboutit sur une
+> **passerelle TLS Anthropic qui termine la connexion elle-même** : elle forge un certificat au
+> nom de l'hôte visé (signé par la CA du bundle `/root/.ccr/`, présente dans le store système,
+> d'où un `curl` sans `-k` qui passe), lit le SNI, et répond 403 avec le nom de l'hôte refusé.
+> Le message dit le mécanisme : le filtrage est **par hôte**, configurable par l'utilisateur
+> (« your network egress settings »), et s'applique **aux deux chemins** — proxy et direct.
+
+### 🔴 Le réglage ajouté par Eliott n'a pas atteint cette session
+
+Contexte de la mission : Eliott venait d'ajouter `*.tailscale.com` aux Network egress settings
+de l'environnement, et `TS_AUTHKEY` aux variables. **Cette session, pourtant démarrée après,
+ne voit ni l'un ni l'autre** : le 403 ci-dessus, et `TS_AUTHKEY` absent de l'environnement
+(vérifié sans afficher de valeur ; le hook `SessionStart` l'avait déjà signalé à 07:12).
+
+Deux hypothèses, **non départagées** — les écrire toutes les deux est la leçon de l'errata 1 :
+
+1. *(a)* allowlist **et** variables sont photographiées à un instant antérieur au réglage —
+   VM provisionnée avant, ou propagation différée côté Anthropic ;
+2. *(b)* le réglage n'a pas été enregistré ou ne s'applique pas à cet environnement-ci
+   (plusieurs environnements existent, le réglage est par environnement).
+
+Le fait que **les deux** réglages manquent **ensemble** penche vers une photographie unique
+prise trop tôt *(a)* — cohérent avec le §3 ter (« une variable ne prend effet qu'à la NAISSANCE
+d'une VM ») étendu à l'allowlist — mais ne prouve rien contre *(b)*. ⇒ **Prochain essai : une
+session neuve, ouverte nettement après le réglage, qui relance la même sonde avant toute autre
+chose.** Si le 403 persiste, c'est *(b)*, et c'est le réglage qu'il faut inspecter, pas la VM.
+
+### ⚠️ Méta : le relevé du 19/08 de la session précédente n'a jamais été poussé
+
+La mission faisait référence à un « erratum du 19/08 » établissant la passerelle par hôte.
+**Aucune trace dans le dépôt** — la session qui l'a établi ne l'a pas poussé, et son relevé
+est perdu avec sa VM. La règle « push = survie » (§2) ne souffre aucune exception, y compris
+pour les sessions qui documentent la règle. Le présent paragraphe reconstruit le constat à
+partir de mesures refaites, pas du souvenir.
+
+### ⭐ 19/08, seconde session : hypothèse *(b)* tranchée — les réglages réseau sont PAR ENVIRONNEMENT (mesuré le 19/08/2026)
+
+Le « prochain essai » ci-dessus a eu lieu le jour même, mais dans un **autre environnement** :
+la session du matin tournait dans « PXL cloud », celle-ci dans « PXL Cloud All-Access ⚠️ ».
+Résultat : **c'était *(b)*** — le réglage ne s'applique qu'à l'environnement où il est posé.
+Ce que chaque environnement voyait, à quelques heures d'écart, même dépôt, même mission :
+
+| Mesure | « PXL cloud » (matin) | « PXL Cloud All-Access ⚠️ » (cette session) |
+|---|---|---|
+| `TS_AUTHKEY` | absent | **présent** (61 caractères, non affichée) |
+| `curl --noproxy '*' https://controlplane.tailscale.com/key?v=138` | 403 `Host not in allowlist` | **200**, JSON des clés publiques, ~100 ms |
+| `https://example.com/` (hôte sans rapport) | *(non sondé)* | **200** — donc pas d'allowlist restrictive ici, pas seulement `*.tailscale.com` ajouté |
+
+> ⭐ **La passerelle TLS Anthropic est là dans LES DEUX cas.** Même sur la connexion qui
+> *réussit*, l'issuer du certificat de `controlplane.tailscale.com` est
+> `O=Anthropic, CN=Egress Gateway SDS Issuing CA (production)` (mesuré à l'`openssl s_client`).
+> All-Access ne retire pas la passerelle : il change sa **politique** (relayer au lieu de 403).
+> Tout l'egress reste terminé-réinspecté ; Tailscale traverse ce MITM parce que la CA Anthropic
+> est dans le store système — control plane comme DERP parlent TLS standard en 443.
+
+**Le nœud est monté** (mission accomplie, contrairement au matin) :
+
+- `claude-vm-pxl-tape.tailaee5f.ts.net` · `100.71.98.107` · `tag:pxl-vm` · relais home `par`
+  (région 18, forcée par `tunnel_up.sh` §4 bis ; elle était déjà `par` avant le forçage, le seul
+  pair en ligne y étant).
+- ⚠️ Fait daté qui **contraste avec le §3 ter** : le hook avait enregistré le nœud sous
+  `pxl-console` ; un **renommage à chaud** `tailscale set --hostname=claude-vm-pxl-tape` a fait
+  suivre le `DNSName` en quelques secondes, sans suffixe `-1` et sans logout. Le DNSName figé du
+  §3 ter concernait la **reprise d'un nom d'homonyme supprimé** — un renommage vers un nom libre,
+  lui, se propage. Deux situations, deux comportements ; ne pas généraliser l'un à l'autre.
+- ⚠️ La console ne répondait pas sur 8710 (`curl` local → connexion refusée, le hook l'avait
+  signalé à 07:16) ; `serve` a été publié quand même — l'URL existera dès qu'un processus
+  écoutera. Non bloquant, conforme à la mission.
+
+### ⭐ 19/08, troisième session : le réglage re-posé a ATTEINT « PXL cloud » (mesuré le 19/08/2026, session de 07:17)
+
+Après le constat *(b)* ci-dessus, Eliott a re-modifié les réglages de l'environnement
+« PXL cloud » ; une session neuve y a été ouverte à 07:17 pour en prendre la photo. Cette
+fois **tout y est** — même environnement que la session bloquée de 07:12, une heure d'écart :
+
+| Mesure (« PXL cloud », 07:17) | Résultat |
+|---|---|
+| `TS_AUTHKEY` | **présent** (61 caractères, non affichée) |
+| `curl --noproxy '*' https://controlplane.tailscale.com/key?v=138` | **200**, JSON des clés publiques |
+| `https://example.com/` (hôte sans rapport) | **403** `Host not in allowlist` — l'allowlist est **restrictive** ici |
+| Issuer du certificat de `controlplane.tailscale.com` | `O=Anthropic, CN=Egress Gateway SDS Issuing CA (production)` |
+
+> ⭐ Les deux environnements ont donc des **politiques différentes derrière la même
+> passerelle** : « PXL cloud » = allowlist par hôte (seuls les hôtes ajoutés passent),
+> « All-Access » = tout relayé. Et le blocage de 07:12 n'était ni *(a)* ni tout à fait *(b)*
+> tel qu'écrit : le re-réglage par Eliott a suffi, une session neuve du **même** environnement
+> voit la nouvelle allowlist. Ce qui reste vrai du §3 ter : la photo se prend à la naissance
+> de la VM — la session de 07:12, née avant le re-réglage, ne l'a jamais vue.
+
+**Le nœud est monté — et le hook l'avait monté TOUT SEUL avant la mission** : à 07:18,
+`session_start.sh` a déroulé téléchargement des binaires, auth par clé, forçage DERP et
+`serve` en ~36 s à froid, sans intervention — première exécution de bout en bout du mécanisme
+du §3 ter dans une VM neuve, sous `pxl-console` (le défaut du script).
+
+- Renommage demandé par la mission : `tailscale logout` puis `TS_HOSTNAME=claude-vm-pxl-tape
+  bash tunnel_up.sh` (la manœuvre du §3 ter) → **`claude-vm-pxl-tape-1.tailaee5f.ts.net`** ·
+  `100.70.195.54` · `tag:pxl-vm` · relais home `par` (région 18, forcée par §4 bis).
+- ⚠️ Le suffixe `-1` est la **contre-épreuve du renommage à chaud de la session jumelle**
+  (ci-dessus) : elle avait pris `claude-vm-pxl-tape` nu vers 07:16, mon enregistrement de
+  07:20 a trouvé le nom occupé. Le `HostName` s'affiche nu (`claude-vm-pxl-tape`) mais le
+  `DNSName` garde `-1` — exactement le comportement figé du §3 ter. Les deux lectures se
+  complètent : renommage vers un nom **libre** → le DNSName suit ; enregistrement sur un nom
+  **pris** → `-1` pour la vie du nœud.
+- ⚠️ Le nœud jumeau (`100.71.98.107`) n'apparaît **pas** dans ma liste de pairs quelques
+  minutes après — évaporé avec sa VM (éphémère), ou masqué par l'ACL entre nœuds tagués :
+  non départagé, et un `-1` à 07:20 prouve seulement que le nom était pris *à cet instant-là*.
+- ⚠️ Console 8710 morte ici aussi, pour une cause différente de la jumelle : le hook lance
+  `node /home/user/PXL-Switcher/console/server.mjs` et **ce dépôt n'est pas dans cette VM**
+  (`MODULE_NOT_FOUND`). `serve` publié quand même — non bloquant.
+
+## 3 quinquies. ⭐⭐ Veiller sur une boîte MBX depuis une VM (ajout du 22/08/2026)
 
 *Demande d'Eliott : « garde toujours un monitoring ouvert sur MBX ». Le courrier de la tour
 arrive quand il arrive ; une session qui ne regarde qu'entre deux tours doit être **réveillée**,
