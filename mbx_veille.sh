@@ -128,6 +128,13 @@ JS
 
 dire "veille sur « $BOITE » chez « $PAIR » — peek toutes les ${PAUSE}s, borne ${MINUTES} min"
 FIN=$(( $(date +%s) + MINUTES * 60 ))
+# ⭐⭐ **COMBIEN DE FOIS A-T-ELLE RÉELLEMENT REGARDÉ ?** Sans ce compteur, la
+# phrase de fin — « borne atteinte sans courrier » — est **la même** que le pont
+# soit tombé au bout de dix secondes ou qu'il ait servi 150 peeks impeccables.
+# C'est-à-dire qu'une heure d'aveuglement se lit comme une heure de calme, et
+# c'est exactement la confusion payée deux fois le 22/08.
+# ⚠️ *Une veille doit rendre compte de sa VUE, pas seulement de ce qu'elle a vu.*
+VUS=0
 
 while [ "$(date +%s)" -lt "$FIN" ]; do
   if ! pont_repond && ! monter_pont; then sleep "$PAUSE"; continue; fi
@@ -157,6 +164,7 @@ while [ "$(date +%s)" -lt "$FIN" ]; do
     printf '%s\n' "$REP" >> "$JOURNAL"
     exit 0                      # aveugle ⇒ on réveille la session, on ne veille pas dans le vide
   fi
+  VUS=$(( VUS + 1 ))            # un peek qui a RENDU une liste — la vue, pas le contenu
 
   if [ "${N:-0}" -gt 0 ] 2>/dev/null; then
     dire "📬 $N message(s) dans « $BOITE » — la boîte n'est PAS vidée, drainer au traitement :"
@@ -167,5 +175,11 @@ while [ "$(date +%s)" -lt "$FIN" ]; do
   sleep "$PAUSE"
 done
 
-dire "borne atteinte (${MINUTES} min) sans courrier — relancer la veille."
+# 🔴 « Sans courrier » ne se dit QU'AVEC le nombre de regards qui le soutiennent.
+if [ "$VUS" -eq 0 ]; then
+  dire "🔴 borne atteinte (${MINUTES} min) et la boîte n'a JAMAIS répondu — ce n'est PAS du calme,"
+  dire "   c'est un pont qui n'a pas tenu. Vérifier tailscaled, puis relancer."
+else
+  dire "borne atteinte (${MINUTES} min) sans courrier, sur ${VUS} regard(s) aboutis — relancer la veille."
+fi
 exit 0
