@@ -425,6 +425,38 @@ ce qui a été fait sur `pxl-airlink` le 01/08.
    au prochain recyclage de cette VM ; d'ici là, l'énoncé honnête est « s'applique en direct
    *souvent*, pas toujours ».
 
+8. ❌ **`pkill -f` (et `pgrep -f`) se tuent eux-mêmes depuis un appel d'outil.** (22/08, payé
+   DEUX fois dans la même séance — exit 144, le tour meurt net et tout ce qui suivait dans la
+   commande composée n'a jamais tourné.) Le harnais lance chaque commande via
+   `/bin/bash -c "<toute la commande composée>"` : la ligne de commande du shell CONTIENT donc
+   le motif littéral (`pkill -f "server_turbohq.mjs 8080"` → le shell se matche lui-même).
+   **Parades, par ordre de sûreté :** tuer par PID relevé AVANT (`ss -tlnp`, fichier PID) ;
+   `pkill -x` (nom exact du binaire, pas la ligne) ; ou couper le motif dans le source pour
+   qu'il n'apparaisse pas littéralement (`pgrep -f 'server_turbo''hq.mjs'` — le process node
+   matche, la ligne du shell qui porte les quotes non). **Leçon : dans une VM harnais, le
+   process le plus proche du motif est TOI.**
+
+9. ❌ **Le `cd` en tête de commande composée casse tous les chemins relatifs qui suivent.**
+   (Récidive au moins 5 fois entre le 19 et le 22/08 — « fatal: pathspec 'v3/turbohq' »,
+   « diff: v3/turbohq: No such file ».) Le motif : `cd /workspace/<autre-dépôt> && … && node
+   v3/turbohq_attach.mjs …` — l'outil d'attache et les diffs de contrôle sont écrits pour être
+   lancés depuis `/home/user/PXL-Tape`. La variante VICIEUSE du 22/08 : l'attache masquée par
+   `>/dev/null 2>&1` a échoué EN SILENCE — le resync n'avait juste pas eu lieu, seul le diff
+   d'après l'a dit. **Parades : chemins absolus partout dans les composées ; jamais de
+   redirection muette sur une étape qui conditionne la suite ; et le harnais remet le cwd à
+   chaque appel (« Shell cwd was reset ») — un `cd` ne « reste » jamais, il ne fait que polluer
+   la commande où il vit.**
+
+10. ❌ **Un `&` shell ne survit pas fiablement à l'appel d'outil — seul `run_in_background`
+    du harnais survit ET réveille.** (Même nuit, même famille que le n°8 : le guetteur MBX
+    relancé par `… & sleep 1` était mort avant la fin de l'appel — la veille qu'on croyait
+    armée ne l'était pas.) Nuance mesurée : un serveur `nohup … &` a survécu plusieurs fois à
+    son appel — la mort n'est pas systématique, elle est INTERMITTENTE, ce qui est pire : un
+    garde-fou qui « marche parfois » n'est pas un garde-fou. Et même survivant, un process
+    shell ne réveille jamais la session ; la tâche harnais (`run_in_background: true`) survit
+    et sa terminaison réveille — c'est LE mécanisme de veille. **Leçon : ce qui doit vivre
+    après le tour, ou réveiller, se confie au harnais, jamais au shell.**
+
 ---
 
 ## 9. Sources
