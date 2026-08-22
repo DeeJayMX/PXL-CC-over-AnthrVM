@@ -513,6 +513,70 @@ d'admin, donc une policy catastrophique se corrige depuis le navigateur.
 
 ---
 
+## 3 quater. ⭐⭐ Veiller sur une boîte MBX depuis une VM (ajout du 22/08/2026)
+
+*Demande d'Eliott : « garde toujours un monitoring ouvert sur MBX ». Le courrier de la tour
+arrive quand il arrive ; une session qui ne regarde qu'entre deux tours doit être **réveillée**,
+pas sondée à la main.* Script : `mbx_veille.sh`.
+
+**Le mécanisme, en une phrase** : une **tâche harnais** qui sort dès qu'il y a du courrier —
+**sa terminaison EST la notification**, puisqu'une tâche suivie réveille la session en se
+terminant. C'est le garde-fou des labos de la nuit du 19-20/08 (« une mort du process réveille
+la session »), appliqué au courrier.
+
+🔴 **En tâche harnais, JAMAIS en `nohup` détaché** : le recyclage tue un détaché en vol, et
+personne ne l'apprend. ⚠️ Et ça ne maintient pas le conteneur en vie — le § 2 l'a mesuré : la
+tour avait un Monitor persistant et son conteneur a redémarré quand même. La veille survit à un
+recyclage parce qu'elle se **relance**, pas parce qu'elle dure.
+
+### Les trois règles, et chacune vient d'un défaut payé le 22/08
+
+1. 🔴 **On PEEK, on ne draine JAMAIS.** `GET /api/turbohq/mbx/<boîte>` sans `?drain=1`. Drainer
+   vide la boîte : si la VM meurt entre la lecture et le traitement, le message est perdu **et
+   rien ne le dit**. La boîte du pair distant est la source de vérité et elle survit à cette VM.
+   Le drain devient un geste conscient, au traitement — exactement la correction que MBX v2 a
+   apportée avec ses curseurs (`MBX_V2_BRIEF.md` § 4).
+
+2. 🔴🔴 **« Vivant » ne veut pas dire « fonctionnel » — on teste la FONCTION, jamais `pgrep`.**
+   Trois fois en une heure le même jour : *(a)* `tunnel_up.sh` annonce **« nœud déjà
+   authentifié »** sur un nœud `Online: False` avec un `AuthURL` en attente — sa garde teste que
+   le démon RÉPOND, pas que le nœud est ENREGISTRÉ (remède : `up --force-reauth`) ; *(b)* le pont
+   TCP dont le processus vit pendant que `tailscaled` est **mort** ; *(c)* `tailscaled` vivant
+   avec une **socket périmée**. `pgrep` répond « oui » aux trois. La veille ne pose qu'une
+   question — *est-ce que le courrier arrive ?* — et remonte le pont sur la réponse.
+   ⚠️ **Corollaire pour tout ce dépôt** : `pgrep`/`status` disent qu'un processus EXISTE ; seule
+   une requête dit qu'il SERT. C'est le motif 9 de `MISTAKE.md` (annoncer un état non vérifié) en
+   version infrastructure — *et c'est Eliott qui l'a vu avant moi, en disant simplement « je ne
+   te vois pas sur tailscale ».*
+
+3. ⏳ **Bornée, et elle le DIT.** Au bout de N minutes (défaut 50) elle rend la main avec
+   « borne atteinte, relancer » — ce qui réveille la session, qui la relance. *Un veilleur qu'on
+   croit vivant est pire qu'un veilleur absent* (leçon de la nuit : « un banc qui doit durer se
+   relance, il ne se suppose pas vivant »).
+
+### Deux pièges concrets, déjà payés
+
+- ⚠️ **`pkill -f <motif>` TUE LE SHELL QUI L'APPELLE** quand le motif apparaît dans sa propre
+  ligne de commande (`bash -c "… pkill -f pont.mjs …"`). Mesuré deux fois — le tour s'arrête sur
+  un `exit 144` inexpliqué. On tue **par PID** (`ps -eo pid,args | awk '/[m]otif/'`, le crochet
+  excluant l'awk lui-même).
+- ⚠️ **Le pair se résout par NOM**, jamais par une IP en dur : l'IP survit tant que le
+  `statedir` survit, le nom survit toujours. `tailscale status | awk '$2 == nom'`.
+
+### Le pont, et pourquoi il faut en passer par là
+
+L'egress est en **userspace-networking** : ni `curl` ni le proxy d'agent ne routent les `100.x`
+(§ 3 bis). La seule voie sortante est `tailscale nc`. D'où un pont TCP local de dix lignes —
+`127.0.0.1:8099` → `tailscale nc <pair> 8080` — que la veille **remonte elle-même** quand il ne
+relaie plus. Le CLI `mbx` du dépôt PXL-TurboHQ parle alors normalement
+(`MBX_URL=http://127.0.0.1:8099`).
+
+```bash
+bash mbx_veille.sh switch-dev claudevm-turbohq 50   # en TÂCHE HARNAIS (run_in_background)
+```
+
+---
+
 ## 4. ⭐ GitHub : deux couches d'application, et ce qu'elles refusent
 
 Il n'y a **pas de `gh` CLI**. Deux chemins seulement, et **ils n'ont pas les mêmes droits** :

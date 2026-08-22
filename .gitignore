@@ -23,3 +23,9 @@ probe_out/
 # rendu persistant ici : c'est TS_AUTHKEY, dans l'environnement, qui survit —
 # voir tunnel_up.sh.
 .tailscale/
+# 🔴 Même nature, un cran plus loin : `session_start.sh` fait démarrer la console
+# ICI quand `PXL_CONSOLE_ETAT` n'est pas posé, et ce répertoire porte la CLÉ DE
+# SIGNATURE DES COOKIES, la table des sessions et l'état sauvegardé du desk (la
+# règle « ne jamais versionner `console/.etat/` » du dépôt PXL-Switcher, sous un
+# autre nom). Le versionner donnerait de quoi forger une session d'antenne.
+.etat-console/
