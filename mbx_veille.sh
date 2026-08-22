@@ -94,6 +94,19 @@ ip_du_pair() {
   "$TS" --socket="$SOCK" status 2>/dev/null \
     | awk -v n="$PAIR" '$2 == n {print $1; exit}'
 }
+# 🔴🔴 **LA LIGNE ENTIÈRE, PAS SEULEMENT L'IP** (22/08, 08:31). `ip_du_pair()`
+# rend une IP même pour un pair **HORS LIGNE** — `tailscale status` continue de
+# le lister. La veille remontait donc un pont vers une machine qui n'existe plus,
+# quatre fois de suite, en accusant le pont : *« pont monté mais muet »*.
+# ⭐ Or c'est le cas NORMAL d'un pair éphémère : la VM d'en face se fait recycler
+# comme la nôtre, et ça n'a rien d'une panne. **Le témoin doit nommer le bon
+# coupable** — sinon on va chercher un défaut de tunnel chez soi pendant que le
+# correspondant dort. Même famille que le 507 du disque : *« pas réglé », « pas
+# trouvé » et « pas là » sont trois pannes différentes.*
+ligne_du_pair() {
+  "$TS" --socket="$SOCK" status 2>/dev/null \
+    | awk -v n="$PAIR" '$2 == n {print; exit}'
+}
 
 # ── Le pont : on le juge sur ce qu'il RELAIE, pas sur son existence (règle 2).
 pont_repond() {
@@ -102,8 +115,19 @@ pont_repond() {
 }
 
 monter_pont() {
-  local ip; ip=$(ip_du_pair)
-  [ -n "$ip" ] || { dire "⚠️ pair « $PAIR » introuvable au tailnet (hors ligne ?)"; return 1; }
+  local ligne ip
+  ligne=$(ligne_du_pair)
+  [ -n "$ligne" ] || { dire "⚠️ pair « $PAIR » ABSENT du tailnet — jamais enregistré, ou déconnecté."; return 1; }
+  # 🔴 Le pair est listé mais HORS LIGNE : sa VM est tombée. Remonter un pont
+  # vers elle ne peut rien donner, et le dire évite de chercher chez soi.
+  case "$ligne" in
+    *offline*)
+      dire "🔴 « $PAIR » est HORS LIGNE au tailnet — $(printf '%s' "$ligne" | sed 's/.*\(offline[^,]*, last seen [^,]*\).*/\1/')."
+      dire "   Ce n'est PAS le pont : sa VM est tombée (recyclage éphémère). On réessaie au tour suivant."
+      return 1 ;;
+  esac
+  ip=$(printf '%s' "$ligne" | awk '{print $1}')
+  [ -n "$ip" ] || { dire "⚠️ pair « $PAIR » sans adresse lisible : $ligne"; return 1; }
   # ⚠️ `pkill -f pont.mjs` tue le shell qui l'appelle : son propre motif est dans
   # sa ligne de commande. On tue par PID, jamais par motif large.
   ps -eo pid,args | awk '/[m]bx-pont\.mjs/ {print $1}' | while read -r p; do kill "$p" 2>/dev/null; done

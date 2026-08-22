@@ -716,6 +716,32 @@ curl -s --noproxy '*' "http://127.0.0.1:8099/api/turbohq/mbx/<boîte>" | head -c
    ⚠️ Et la boucle appelle **la même fonction** — la recopier en ferait deux, et le contrôle ne
    prouverait plus rien de ce qui tourne.
 
+### ⭐ AJOUT du 22/08 08:35 — un pair HORS LIGNE n'est pas un pont cassé
+
+Après six bornes calmes et **145 regards aboutis** chacune, la veille s'est mise à répéter
+*« ⚠️ pont monté mais muet — claudevm-turbohq ne répond pas sur 8080 »*, quatre fois. Diagnostic :
+la VM du pair était **hors ligne depuis 4 min** — son conteneur s'était fait recycler, exactement
+comme le nôtre le fera.
+
+🔴 **`ip_du_pair()` rendait une IP quand même** : `tailscale status` continue de lister un pair
+hors ligne, avec son adresse. La veille remontait donc un pont vers une machine qui n'existe plus,
+et **accusait le pont**. *Une machine listée n'est pas une machine joignable* — la règle 2 (« vivant
+≠ fonctionnel ») appliquée non plus à un processus mais à un **correspondant**.
+
+⇒ `ligne_du_pair()` lit la **ligne entière** et la veille nomme le bon coupable, avec l'âge :
+
+```
+🔴 « claudevm-turbohq » est HORS LIGNE au tailnet — offline, last seen 5m ago.
+   Ce n'est PAS le pont : sa VM est tombée (recyclage éphémère). On réessaie au tour suivant.
+```
+
+⚠️ **Et ce n'est pas une panne** : c'est le régime normal de deux VM éphémères qui se parlent. Ce
+qu'il fallait corriger n'est pas la connexion, c'est **ce que le témoin en dit** — sinon on passe
+une heure sur son propre tunnel pendant que le correspondant dort. Même famille que le 507 du
+disque côté console : *« pas réglé », « pas trouvé » et « pas là » sont trois pannes différentes.*
+✅ Vérifié **contre la condition réelle**, pas contre un cas fabriqué — le pair était effectivement
+tombé au moment de l'écriture.
+
 ### Deux pièges concrets, déjà payés
 
 - ⚠️ **`pkill -f <motif>` TUE LE SHELL QUI L'APPELLE** quand le motif apparaît dans sa propre
