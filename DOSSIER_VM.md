@@ -245,6 +245,9 @@ ce qui a été fait sur `pxl-airlink` le 01/08.
    **WebGPU n'erreure pas — il ignore silencieusement les commandes** : un banc peut compter
    des centaines d'images « décodées » sur un GPU mort, zéro image jetée, écran figé.
 
+   *Revérifié le 28/08 sous le VRAI Google Chrome 152 : **identique**. Ce n'est donc pas un
+   défaut du build Chromium préinstallé, mais bien SwiftShader/headless.*
+
    **Ce que ça impose à un banc dans cette VM :**
    - ✅ prouvable : tout ce qui se relit par `copyTextureToBuffer` + `mapAsync` ;
    - ❌ non prouvable : tout ce qui passe par **l'affichage** d'un canvas WebGPU ;
@@ -259,22 +262,37 @@ ce qui a été fait sur `pxl-airlink` le 01/08.
    persistants ne change rien non plus. *Chacune coûtait un aller-retour ; seule la sonde
    d'isolement a tranché.*
 
-7. **Google Chrome (le vrai, pas Chromium) n'est pas installable — au 28/08.**
-   `dl.google.com` répond **403 au CONNECT** du proxy (visible dans
-   `curl -sS "$HTTPS_PROXY/__agentproxy/status"` → `recentRelayFailures`), comme
-   `www.google.com` et `redirector.gvt1.com`. Aucun binaire Chrome présent
-   (`/usr/bin/google-chrome`, `/opt/google/chrome/chrome`, `dpkg -l` : rien).
+7. ⭐ **Google Chrome (le vrai) S'INSTALLE — et il apporte le H.264 en WebCodecs.**
+   *Mesuré le 28/08, en deux temps : la première tentative a échoué, Eliott a ouvert
+   l'environnement, la seconde est passée. **Les deux moments sont vrais** — c'est la
+   politique réseau qui a changé entre les deux, pas le constat.*
 
-   ⚠️ **Eliott rapporte qu'un vrai Chrome a été installé dans une session antérieure.** Ce
-   n'est pas contradictoire, c'est **daté** : soit l'allowlist du proxy a changé depuis, soit
-   l'installation est passée par une autre route. Dans les deux cas la conclusion pratique est
-   la même — **une installation de Chrome ne survit pas au recyclage** (comme tout ce qui vit
-   hors du workdir), et **elle n'est pas reproductible aujourd'hui**. Ne pas planifier un banc
-   qui en dépend sans avoir d'abord vérifié `dl.google.com` dans la session courante.
+   ```bash
+   curl -sSL -o chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+   dpkg -i chrome.deb || { apt-get update -qq && apt-get -f install -y; }
+   /opt/google/chrome/chrome --version      # → Google Chrome 152.0.7977.64
+   ```
+   ⚠️ Le `apt-get update` n'est PAS optionnel : sans lui, `apt-get -f install` échoue sur un
+   index périmé (`404 Not Found` sur `libegl-mesa0`) et Chrome reste à moitié installé.
 
-   *Ce que Chrome apporterait, et qu'on n'a donc pas :* les codecs propriétaires
-   (**H.264/HEVC** en WebCodecs, cf. §6) — donc le récepteur H.264 de TurboHQ reste
-   invérifiable ici, et le seul chemin testable en VM est **MJPEG/VP9/AV1**.
+   **Ce qu'il change, mesuré** (`VideoDecoder.isConfigSupported`, comparé côte à côte) :
+
+   | | Chromium préinstallé | **Google Chrome 152** |
+   |---|---|---|
+   | H.264 décodage | ❌ | ✅ |
+   | H.264 **encodage** | ❌ | ✅ |
+   | HEVC | ❌ | ❌ (Chrome Linux ne l'embarque pas) |
+   | VP9 · AV1 | ✅ | ✅ |
+   | canvas WebGPU affiché | ❌ | ❌ **identique** — voir piège 6 |
+
+   ⇒ **le récepteur H.264 de TurboHQ devient testable en VM**, ce qui n'était pas le cas.
+   ⇒ mais **le piège 6 n'est PAS un problème de build** : le canvas WebGPU ne se composite
+   pas davantage sous le vrai Chrome. C'est bien SwiftShader/headless, pas Chromium.
+
+   Bascule dans nos bancs : `PXL_BROWSER=chrome node <banc>` (`webgpu_harness.mjs`).
+
+   ⚠️ **Ça ne survit pas au recyclage** — comme tout ce qui vit hors du workdir. La recette
+   ci-dessus est à rejouer à chaque session qui en a besoin.
 
 ### La division du travail
 
@@ -299,7 +317,7 @@ ce qui a été fait sur `pxl-airlink` le 01/08.
 | **Autoriser un serveur MCP en OAuth** | le flux est interactif ; en session non-interactive c'est impossible. Vu le 01/08 sur le connecteur Canva. ⇒ passe par les réglages claude.ai de l'utilisateur |
 | Plafonner la VRAM par un flag Chromium | §6 piège 4 |
 | **Afficher un canvas WebGPU** (et donc tester un rendu à l'écran) | §6 piège 6 — présenter perd le device |
-| **Installer le vrai Google Chrome** (donc H.264/HEVC en WebCodecs) | §6 piège 7 — `dl.google.com` en 403 |
+| **HEVC en WebCodecs** | §6 piège 7 — même le vrai Chrome ne l'embarque pas sous Linux |
 
 ---
 
