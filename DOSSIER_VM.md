@@ -230,6 +230,52 @@ ce qui a été fait sur `pxl-airlink` le 01/08.
    changement de révision. **Inutile** : `/opt/pw-browsers/chromium` est un **lien symbolique
    direct vers le binaire**. Utiliser ce chemin — il est stable.
 
+6. 🔴🔴 **LA PRÉSENTATION D'UN CANVAS WEBGPU EST HORS DE PORTÉE — et elle PERD LE DEVICE.**
+   *Mesuré le 28/08, sonde rejouable : `probes/webgpu_canvas_probe.mjs`.*
+
+   | Épreuve | Résultat |
+   |---|---|
+   | compute WGSL + `copyTextureToBuffer` + `mapAsync` | ✅ **fonctionne** (c'est le §6 déjà connu) |
+   | canvas **2D** ordinaire, rempli en vert, capturé | ✅ **0,255,0** — témoin sain |
+   | canvas **WebGPU**, clear rouge par render pass, capturé | ❌ **rien** — le fond de page traverse |
+   | `configure()` puis `getCurrentTexture()` en boucle, **sans aucun rendu** | ❌ **`device.lost`** : « a valid external Instance reference no longer exists » |
+
+   La dernière ligne est la plus importante : **aucun code applicatif n'est en cause**. Il
+   suffit de *présenter* un canvas WebGPU pour perdre le device. Et une fois le device perdu,
+   **WebGPU n'erreure pas — il ignore silencieusement les commandes** : un banc peut compter
+   des centaines d'images « décodées » sur un GPU mort, zéro image jetée, écran figé.
+
+   **Ce que ça impose à un banc dans cette VM :**
+   - ✅ prouvable : tout ce qui se relit par `copyTextureToBuffer` + `mapAsync` ;
+   - ❌ non prouvable : tout ce qui passe par **l'affichage** d'un canvas WebGPU ;
+   - ⚠️ toujours brancher `device.lost` et le faire **échouer le banc**, sinon le compteur ment ;
+   - ⚠️ un témoin doit vivre dans une **page séparée** : la perte du device casse la composition
+     de toute la page, un canvas 2D témoin ressort blanc lui aussi.
+
+   **Trois hypothèses réfutées avant celle-là** (elles reviendront, elles sont plausibles) :
+   *(a)* l'adaptateur `GPUAdapter` collecté par le GC — le garder en vie ne change rien ;
+   *(b)* le monde d'exécution séparé de Playwright — l'échec se produit aussi depuis le monde
+   principal de la page ; *(c)* le churn de tampons (13 créés/détruits par image) — les rendre
+   persistants ne change rien non plus. *Chacune coûtait un aller-retour ; seule la sonde
+   d'isolement a tranché.*
+
+7. **Google Chrome (le vrai, pas Chromium) n'est pas installable — au 28/08.**
+   `dl.google.com` répond **403 au CONNECT** du proxy (visible dans
+   `curl -sS "$HTTPS_PROXY/__agentproxy/status"` → `recentRelayFailures`), comme
+   `www.google.com` et `redirector.gvt1.com`. Aucun binaire Chrome présent
+   (`/usr/bin/google-chrome`, `/opt/google/chrome/chrome`, `dpkg -l` : rien).
+
+   ⚠️ **Eliott rapporte qu'un vrai Chrome a été installé dans une session antérieure.** Ce
+   n'est pas contradictoire, c'est **daté** : soit l'allowlist du proxy a changé depuis, soit
+   l'installation est passée par une autre route. Dans les deux cas la conclusion pratique est
+   la même — **une installation de Chrome ne survit pas au recyclage** (comme tout ce qui vit
+   hors du workdir), et **elle n'est pas reproductible aujourd'hui**. Ne pas planifier un banc
+   qui en dépend sans avoir d'abord vérifié `dl.google.com` dans la session courante.
+
+   *Ce que Chrome apporterait, et qu'on n'a donc pas :* les codecs propriétaires
+   (**H.264/HEVC** en WebCodecs, cf. §6) — donc le récepteur H.264 de TurboHQ reste
+   invérifiable ici, et le seul chemin testable en VM est **MJPEG/VP9/AV1**.
+
 ### La division du travail
 
 | Étage | Où | Quoi |
@@ -252,6 +298,8 @@ ce qui a été fait sur `pxl-airlink` le 01/08.
 | Localiser la VM | metadata bloquée (§1, §3) |
 | **Autoriser un serveur MCP en OAuth** | le flux est interactif ; en session non-interactive c'est impossible. Vu le 01/08 sur le connecteur Canva. ⇒ passe par les réglages claude.ai de l'utilisateur |
 | Plafonner la VRAM par un flag Chromium | §6 piège 4 |
+| **Afficher un canvas WebGPU** (et donc tester un rendu à l'écran) | §6 piège 6 — présenter perd le device |
+| **Installer le vrai Google Chrome** (donc H.264/HEVC en WebCodecs) | §6 piège 7 — `dl.google.com` en 403 |
 
 ---
 
@@ -297,7 +345,7 @@ ce qui a été fait sur `pxl-airlink` le 01/08.
 ## 9. Sources
 
 **Mesures** — `probes/vm_survey.sh` (01/08) · `probes/webgpu_probe.mjs`, `probes/vram_probe.mjs`
-(25-26/07) · relevés de cycle de vie des 26-27/07, repris de
+(25-26/07) · **`probes/webgpu_canvas_probe.mjs` (28/08)** · relevés de cycle de vie des 26-27/07, repris de
 `PXL-Tape/v3/tests/investigations/note_vm_lifecycle.md`.
 
 **Documentation** — [Claude Code on the web](https://code.claude.com/docs/en/claude-code-on-the-web)
