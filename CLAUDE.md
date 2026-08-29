@@ -108,6 +108,20 @@ Détaillé dans `DOSSIER_VM.md` §4 et §7 — les pièges qui coûtent le plus 
   logout` puis `tunnel_up.sh` — **pas** un rafraîchissement de session, qui recrée la VM et tue
   la console au passage. ⚠️ Et le nœud éphémère meurt avec la VM : relancer console **puis**
   tunnel à chaque réveil, dans cet ordre.
+- ⭐⭐ **LA CARTE EST JOIGNABLE DEPUIS LA VM depuis le 29/08** (§ 3 sexies) — elle est taguée
+  `tag:pxl-dev` et une règle ouvre **22 · 8710 · 443 · 8443**. `tailscale nc` est le **seul**
+  outil qui route le 100.x (userspace-networking : ni `curl` ni le proxy ne le voient), et
+  `~/.ssh/config` porte un hôte `pxl-tx` dont le `ProxyCommand` s'en sert.
+  🔴 **Trois verdicts, trois causes, et « refusé » est la BONNE nouvelle** : un RST prouve que le
+  paquet a atteint la carte (l'ACL passe, rien n'écoute) ; seul un **pendu** est un refus d'ACL,
+  Tailscale jetant en silence. Toujours sonder **un port hors règle en contrôle**, sinon les deux
+  se confondent en « ça ne marche pas ».
+  ⚠️ **Et `timeout … | head` rend le code de `head`** : la première sonde annonçait `rc=0` sur
+  cinq ports dont deux étaient dropés — une victoire fausse.
+  🔴 **Le SSH reste fermé et le TAG en est la cause** : le bloc `ssh` du tailnet vise
+  `autogroup:self`, dont une machine taguée ne fait jamais partie. Il faut une règle `ssh` en
+  **`accept`** (jamais `check` — il demande une ré-auth humaine) **et** `tailscale set --ssh`
+  sur la carte. 🎯 Ouvrir un port n'allume rien derrière : 443/8443 sont ouverts et **vides**.
 - **Chromium** : contexte sécurisé obligatoire (`http://127.0.0.1:<port>`, pas `about:blank`),
   et Chromium hérite de `HTTPS_PROXY` ⇒ `proxy: {server: 'direct://'}`. Binaire stable :
   `/opt/pw-browsers/chromium` (lien symbolique — ne pas versionner la révision). Ne pas lancer

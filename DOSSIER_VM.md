@@ -855,6 +855,101 @@ bash mbx_veille.sh switch-dev claudevm-turbohq 50   # en TÂCHE HARNAIS (run_in_
 
 ---
 
+## 3 sexies. ⭐⭐ La VM atteint enfin la CARTE — et « refusé » était la bonne nouvelle (mesuré le 29/08/2026)
+
+*Demande d'Eliott : « Connecte-toi à Tailscale, tu auras directement accès à la carte pour dev.
+en direct », puis, après une première sonde qui montrait la carte injoignable : « je peux tagger
+la carte dans le même groupe », « au lieu de pxl-carte c'est pxl-dev pour device, vas-y teste
+j'ai mis aussi le 443 et le 8443 ».*
+
+**L'état d'avant** (mesuré le même jour, quelques heures plus tôt) : le tunnel montait, la
+console de la VM était publiée, `tailscale ping` vers la carte pongait — **et toute connexion
+TCP vers elle pendait**. C'était l'ACL : le tailnet est en *default-deny*, et aucune règle
+n'avait `tag:pxl-vm` en `src`.
+
+**L'état d'après** — Eliott a tagué la carte `tag:pxl-dev` et écrit la règle. La carte apparaît
+désormais `tagged-devices` dans `tailscale status` au lieu de `DeeJayMX@`, ce qui est déjà le
+premier témoin.
+
+### La sonde, et ses deux lignes de contrôle
+
+Depuis la VM, `tailscale nc` — **seul outil qui route le 100.x** ici (userspace-networking : ni
+`curl` ni le proxy de session ne voient le tailnet).
+
+| port | verdict | temps | ce que ça prouve |
+|---|---|---|---|
+| **22** | connecté | 130 ms | `SSH-2.0-OpenSSH_9.2p1 Debian-2+deb12u3` |
+| **8710** | connecté | — | `HTTP/1.1 200`, `<title>PXL Switch — connexion</title>` |
+| **443** | **REFUSÉ** (RST) | — | l'ACL passe · **rien n'écoute** |
+| **8443** | **REFUSÉ** (RST) | — | l'ACL passe · **rien n'écoute** |
+| 80 | pendu, tué à 8 s | 8007 ms | l'ACL **jette** |
+| 8711 | pendu, tué à 8 s | 8004 ms | l'ACL **jette** (contrôle) |
+
+🔴🔴 **TROIS verdicts distincts, et c'est ce qui fait la mesure.** Le réflexe lit « connection
+refused » comme un échec ; c'est l'**inverse** — un RST prouve que le paquet a *atteint* la
+carte, donc que l'ACL l'a laissé passer, et que le seul manque est un serveur derrière. Le refus
+d'ACL, lui, ne dit rien : Tailscale **jette en silence**, il ne rejette pas. ⭐ **Sans les deux
+lignes de contrôle** (80 et 8711, délibérément hors de la règle), « refusé » et « dropé » se
+seraient confondus dans un même *« ça ne marche pas »* — et on aurait conclu que la règle
+d'Eliott n'avait pas pris, alors qu'elle avait pris exactement.
+
+⚠️ **Et la sonde s'est trompée D'ABORD, dans son tuyau.** Première rédaction :
+`timeout 8 $TS nc … | head -c 200` puis `rc=$?` — qui rend le code de sortie de **`head`**, pas
+celui de `timeout`. Les cinq ports rendaient donc `rc=0`, c'est-à-dire *« tout marche »*, sur
+une carte dont deux ports étaient encore inatteignables. **Un banc incapable de voir l'échec
+qu'il cherche** (`MISTAKE.md` motif 2), en une seule barre verticale — et il aurait annoncé une
+victoire, ce qui est la forme la plus coûteuse de ce défaut.
+
+### ⭐ Ce que la sonde a tranché en plus : `100.94.64.107` **EST** la carte
+
+Jusque-là c'était **concordant, pas démontré** — « seul pair Linux en ligne », et un nom qui
+ressemblait. La preuve est venue toute seule : le port 8710 sert **la page de connexion de notre
+propre console**, en-tête CSP compris
+(`default-src 'self'; img-src 'self' data:; frame-ancestors 'none'`). *Un discriminant coûte une
+commande*, et celui-ci était dans la réponse qu'on lisait déjà.
+
+### 🎯 Ouvrir un port n'allume rien derrière
+
+443 et 8443 sont **ouverts et vides** : la carte n'a pas de `tailscale serve`. C'est un geste à
+faire **sur la carte**, le jour où on veut du HTTPS nommé. *Autoriser n'est pas servir* — même
+famille que le § 14 côté Switcher, où *déclarer n'est pas tenir*.
+
+### 🔴 Le SSH reste fermé, et le tag en est la cause
+
+Le transport jusqu'au port 22 marche (bannière lue à travers `tailscale nc`, empreinte
+`SHA256:X8ebKe7SGzGL7M8J5ew568YiEcr6I/MWo0u5eSA1o8o`), et le `sshd` de la carte n'offre que
+`publickey,password` — donc **Tailscale SSH n'est pas en jeu**, on tombe sur le serveur
+ordinaire, et la VM n'a ni clé ni mot de passe.
+
+⚠️ **La cause est un effet de bord du tag, pas un oubli** : le seul bloc `ssh` du tailnet vise
+`autogroup:self`, et **une machine taguée n'en fait jamais partie** (le §3 ter l'avait écrit
+pour la VM ; ça vaut identiquement pour la carte). *Un tag n'ajoute pas une identité, il en
+remplace une* — la carte a donc quitté ce bloc au moment même où elle recevait `tag:pxl-dev`.
+
+Deux gestes le rouvriraient, et il faut **les deux** :
+1. une règle `ssh` `tag:pxl-vm → tag:pxl-dev`, en 🔴 **`action: "accept"`, jamais `"check"`** —
+   `check` exige une ré-authentification humaine dans un navigateur, et une VM sans opérateur
+   devant elle attendrait indéfiniment ;
+2. `tailscale set --ssh` **sur la carte** — une règle `ssh` ne fait rien tant que le nœud
+   distant n'a pas activé Tailscale SSH. C'est le 443 vide, une couche plus haut.
+
+🎯 **L'alternative « une paire de clés » est le mauvais outil ICI** : la clé privée mourrait avec
+la VM (le workdir ne survit pas) et la versionner publierait un secret — il faudrait la
+régénérer à chaque réveil. C'est exactement le raisonnement qui avait fait choisir `TS_AUTHKEY`
+pour le tunnel (errata 8).
+
+### Ce qui est utilisable dès maintenant
+
+`~/.ssh/config` porte un hôte `pxl-tx` dont le `ProxyCommand` est `tailscale nc` — donc le jour
+où il y a un credential, `ssh pxl-tx` marche sans rien d'autre à câbler. Et **la console de la
+carte répond déjà** sur 8710 ; il n'y manque que `PXL_CONSOLE_MOTDEPASSE`, absente de
+l'environnement de cette VM.
+
+⚠️ *Ces deux manques sont des **credentials**, pas des chemins réseau : le réseau, lui, est
+mesuré et il passe.*
+
+---
+
 ## 4. ⭐ GitHub : deux couches d'application, et ce qu'elles refusent
 
 Il n'y a **pas de `gh` CLI**. Deux chemins seulement, et **ils n'ont pas les mêmes droits** :

@@ -31,6 +31,18 @@
 	// avec `Self.Tags = ["tag:pxl-vm"]`.
 	"tagOwners": {
 		"tag:pxl-vm": ["autogroup:admin"],
+
+		// ⭐ AJOUTÉ PAR ELIOTT LE 29/08 — la CARTE (`pxl-tx`), pour que la VM
+		// puisse développer en direct dessus. Le nom est `pxl-dev` (pour
+		// *device*), pas `pxl-carte` : c'est lui qui est en service.
+		//
+		// ⚠️ Poser ce tag a un effet de bord qu'on n'a pas choisi : une machine
+		// taguée SORT d'`autogroup:self`. La carte a donc quitté la première
+		// règle (« les appareils d'un utilisateur entre eux ») ET le bloc `ssh`
+		// plus bas, qui vise `autogroup:self`. Tout accès à la carte passe
+		// désormais par les règles explicites ci-dessous, y compris depuis le
+		// poste d'Eliott. *Un tag n'ajoute pas une identité, il en remplace une.*
+		"tag:pxl-dev": ["autogroup:admin"],
 	},
 
 	// ─── Accès ────────────────────────────────────────────────────────────────
@@ -54,10 +66,59 @@
 		// joignable sur cette machine.
 		{"action": "accept", "src": ["autogroup:member"], "dst": ["tag:pxl-vm:443"]},
 
-		// ⚠️ ET SURTOUT : aucune règle n'a `tag:pxl-vm` en `src`. La VM ne peut
-		// donc joindre aucune machine du tailnet. Sa sortie internet et son
-		// relais DERP ne passent pas par les ACL — elle fonctionne normalement,
-		// elle est juste incapable d'entrer chez qui que ce soit.
+		// ⭐⭐ LA VM → LA CARTE (29/08). C'est la règle qu'Eliott a écrite pour
+		// qu'on développe en direct sur le desk, et la PREMIÈRE qui donne à
+		// `tag:pxl-vm` un droit en `src` — le paragraphe ci-dessous, qui disait
+		// « aucune règle n'a `tag:pxl-vm` en src », n'est donc plus vrai.
+		//
+		// 🔴 CETTE LIGNE N'A PAS ÉTÉ LUE, ELLE A ÉTÉ MESURÉE — et les deux
+		// moitiés n'ont pas le même statut :
+		//   · les PORTS sont **démontrés** (sonde du 29/08, ci-dessous) ;
+		//   · les sélecteurs `src`/`dst` sont **déduits** — je n'ai pas accès à
+		//     la console d'admin. Si Eliott a écrit `autogroup:member` en `src`
+		//     plutôt que `tag:pxl-vm`, l'effet observé serait identique.
+		// ⚠️ Donc : en cas de divergence, la console fait foi, comme toujours —
+		// mais ici on le sait d'avance pour une moitié de la ligne.
+		{"action": "accept", "src": ["tag:pxl-vm"], "dst": ["tag:pxl-dev:22,443,8443,8710"]},
+
+		// ⭐⭐ LA SONDE QUI A ÉTABLI CES PORTS, et son CONTRÔLE (29/08, depuis la
+		// VM, `tailscale nc` — seul outil qui route le 100.x en userspace) :
+		//
+		//   | port | verdict            | temps  | ce que ça prouve            |
+		//   |------|--------------------|--------|-----------------------------|
+		//   | 22   | connecté           | 130 ms | bannière `SSH-2.0-OpenSSH_9.2p1 Debian-2+deb12u3` |
+		//   | 8710 | connecté           | —      | `HTTP/1.1 200`, `<title>PXL Switch — connexion</title>` |
+		//   | 443  | REFUSÉ (RST)       | —      | l'ACL passe · rien n'écoute |
+		//   | 8443 | REFUSÉ (RST)       | —      | l'ACL passe · rien n'écoute |
+		//   | 80   | pendu, tué à 8 s   | 8007ms | l'ACL DROP                  |
+		//   | 8711 | pendu, tué à 8 s   | 8004ms | l'ACL DROP (contrôle)       |
+		//
+		// ⭐⭐ **Les trois verdicts sont distincts, et c'est ça qui fait la
+		// mesure.** Un « refus » se lit spontanément comme un échec ; c'est
+		// l'inverse — un RST prouve que le paquet a ATTEINT la carte, donc que
+		// l'ACL l'a laissé passer. Seul le PENDU est un refus d'ACL (Tailscale
+		// jette en silence, il ne rejette pas). Sans les deux lignes de contrôle
+		// (80 et 8711, hors règle), « refusé » et « dropé » se seraient
+		// confondus dans un même « ça ne marche pas ».
+		// ⚠️ **Et la sonde s'est trompée d'abord** : `timeout … nc … | head` rend
+		// le code de `head`, pas celui de `timeout` — les cinq ports rendaient
+		// donc `rc=0`, c'est-à-dire « tout marche ». *Un banc qui ne peut pas
+		// voir l'échec qu'il cherche* (MISTAKE.md motif 2), en une barre
+		// verticale.
+		//
+		// ⭐ Ce que la sonde a tranché EN PLUS, et qui n'était que concordant
+		// jusque-là : `100.94.64.107` **EST** la carte. On l'avait déduit de
+		// « seul pair Linux en ligne » ; la preuve est que le port 8710 y sert
+		// la page de connexion de NOTRE console, en-tête CSP compris.
+		//
+		// 🎯 443 et 8443 sont ouverts et **vides** — le `tailscale serve` de la
+		// carte n'existe pas. Ouvrir un port n'allume rien derrière ; c'est un
+		// geste à faire SUR la carte le jour où on en veut du HTTPS nommé.
+
+		// ⚠️ Ce qui reste vrai du paragraphe d'origine : la VM ne joint AUCUNE
+		// autre machine du tailnet — la règle ci-dessus nomme `tag:pxl-dev` et
+		// rien d'autre. Sa sortie internet et son relais DERP ne passent pas par
+		// les ACL.
 		//
 		// 🔴 NON VÉRIFIÉ depuis la VM, et ça ne peut pas l'être : un `curl` vers
 		// son propre nom tailnet échoue pour deux raisons qui n'ont rien à voir
@@ -70,6 +131,29 @@
 	// Inchangé par rapport au fichier d'exemple. `autogroup:self` excluant les
 	// machines taguées, la VM n'est pas joignable en SSH — comportement voulu,
 	// obtenu sans rien écrire de plus.
+	//
+	// 🔴🔴 ET DEPUIS LE 29/08 CE BLOC NE COUVRE PLUS LA CARTE NON PLUS. Elle est
+	// taguée `tag:pxl-dev`, donc hors d'`autogroup:self`, donc hors de la seule
+	// règle `ssh` du tailnet. **Mesuré** : le TRANSPORT jusqu'au port 22 marche
+	// (bannière OpenSSH lue à travers `tailscale nc`), et le serveur n'offre que
+	// `publickey,password` — c'est-à-dire que Tailscale SSH n'est pas en jeu,
+	// on tombe sur le `sshd` ordinaire de la carte. Empreinte relevée le 29/08 :
+	// `SHA256:X8ebKe7SGzGL7M8J5ew568YiEcr6I/MWo0u5eSA1o8o` (ED25519).
+	//
+	// ⚠️ Ce bloc n'a PAS été modifié — ce fichier est une copie de ce qui est en
+	// service, pas un brouillon de ce qu'on voudrait. Ouvrir le SSH de la carte
+	// à la VM demanderait d'AJOUTER une règle, et deux points décident :
+	//   *(1)* 🔴 `action` doit être **`accept`**, JAMAIS `check` : `check`
+	//         exige une ré-authentification humaine dans un navigateur, et une
+	//         VM sans opérateur devant elle attendrait indéfiniment ;
+	//   *(2)* il faut aussi `tailscale set --ssh` SUR LA CARTE — une règle
+	//         `ssh` ne fait rien tant que le nœud distant n'a pas activé
+	//         Tailscale SSH. *Autoriser n'est pas servir*, exactement comme les
+	//         ports 443/8443 ouverts et vides ci-dessus.
+	// 🎯 L'alternative — une paire de clés — est le mauvais outil ICI : la clé
+	// privée mourrait avec la VM (le workdir ne survit pas) et la versionner
+	// publierait un secret. Il faudrait la régénérer à chaque réveil. C'est
+	// exactement le raisonnement qui a fait choisir `TS_AUTHKEY` pour le tunnel.
 	"ssh": [
 		{
 			"action": "check",
@@ -112,6 +196,15 @@
 			"src":    "<login>@github",
 			"accept": ["tag:pxl-vm:443"],
 			"deny":   ["tag:pxl-vm:22"],
+		},
+
+		// ⭐ Le pendant du 29/08 : la VM atteint la carte sur les quatre ports
+		// nommés, et RIEN d'autre. Le `deny` est la moitié qui compte — sans
+		// lui, remplacer la règle par `tag:pxl-dev:*` passerait le test.
+		{
+			"src":    "tag:pxl-vm",
+			"accept": ["tag:pxl-dev:22", "tag:pxl-dev:8710", "tag:pxl-dev:443", "tag:pxl-dev:8443"],
+			"deny":   ["tag:pxl-dev:80", "tag:pxl-dev:8711"],
 		},
 	],
 }
