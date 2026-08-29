@@ -919,6 +919,70 @@ Trois choses apprises, et la troisième est la vraie leçon :
    changement de révision. **Inutile** : `/opt/pw-browsers/chromium` est un **lien symbolique
    direct vers le binaire**. Utiliser ce chemin — il est stable.
 
+6. 🔴🔴 **LA PRÉSENTATION D'UN CANVAS WEBGPU EST HORS DE PORTÉE — et elle PERD LE DEVICE.**
+   *Mesuré le 28/08, sonde rejouable : `probes/webgpu_canvas_probe.mjs`.*
+
+   | Épreuve | Résultat |
+   |---|---|
+   | compute WGSL + `copyTextureToBuffer` + `mapAsync` | ✅ **fonctionne** (c'est le §6 déjà connu) |
+   | canvas **2D** ordinaire, rempli en vert, capturé | ✅ **0,255,0** — témoin sain |
+   | canvas **WebGPU**, clear rouge par render pass, capturé | ❌ **rien** — le fond de page traverse |
+   | `configure()` puis `getCurrentTexture()` en boucle, **sans aucun rendu** | ❌ **`device.lost`** : « a valid external Instance reference no longer exists » |
+
+   La dernière ligne est la plus importante : **aucun code applicatif n'est en cause**. Il
+   suffit de *présenter* un canvas WebGPU pour perdre le device. Et une fois le device perdu,
+   **WebGPU n'erreure pas — il ignore silencieusement les commandes** : un banc peut compter
+   des centaines d'images « décodées » sur un GPU mort, zéro image jetée, écran figé.
+
+   *Revérifié le 28/08 sous le VRAI Google Chrome 152 : **identique**. Ce n'est donc pas un
+   défaut du build Chromium préinstallé, mais bien SwiftShader/headless.*
+
+   **Ce que ça impose à un banc dans cette VM :**
+   - ✅ prouvable : tout ce qui se relit par `copyTextureToBuffer` + `mapAsync` ;
+   - ❌ non prouvable : tout ce qui passe par **l'affichage** d'un canvas WebGPU ;
+   - ⚠️ toujours brancher `device.lost` et le faire **échouer le banc**, sinon le compteur ment ;
+   - ⚠️ un témoin doit vivre dans une **page séparée** : la perte du device casse la composition
+     de toute la page, un canvas 2D témoin ressort blanc lui aussi.
+
+   **Trois hypothèses réfutées avant celle-là** (elles reviendront, elles sont plausibles) :
+   *(a)* l'adaptateur `GPUAdapter` collecté par le GC — le garder en vie ne change rien ;
+   *(b)* le monde d'exécution séparé de Playwright — l'échec se produit aussi depuis le monde
+   principal de la page ; *(c)* le churn de tampons (13 créés/détruits par image) — les rendre
+   persistants ne change rien non plus. *Chacune coûtait un aller-retour ; seule la sonde
+   d'isolement a tranché.*
+
+7. ⭐ **Google Chrome (le vrai) S'INSTALLE — et il apporte le H.264 en WebCodecs.**
+   *Mesuré le 28/08, en deux temps : la première tentative a échoué, Eliott a ouvert
+   l'environnement, la seconde est passée. **Les deux moments sont vrais** — c'est la
+   politique réseau qui a changé entre les deux, pas le constat.*
+
+   ```bash
+   curl -sSL -o chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+   dpkg -i chrome.deb || { apt-get update -qq && apt-get -f install -y; }
+   /opt/google/chrome/chrome --version      # → Google Chrome 152.0.7977.64
+   ```
+   ⚠️ Le `apt-get update` n'est PAS optionnel : sans lui, `apt-get -f install` échoue sur un
+   index périmé (`404 Not Found` sur `libegl-mesa0`) et Chrome reste à moitié installé.
+
+   **Ce qu'il change, mesuré** (`VideoDecoder.isConfigSupported`, comparé côte à côte) :
+
+   | | Chromium préinstallé | **Google Chrome 152** |
+   |---|---|---|
+   | H.264 décodage | ❌ | ✅ |
+   | H.264 **encodage** | ❌ | ✅ |
+   | HEVC | ❌ | ❌ (Chrome Linux ne l'embarque pas) |
+   | VP9 · AV1 | ✅ | ✅ |
+   | canvas WebGPU affiché | ❌ | ❌ **identique** — voir piège 6 |
+
+   ⇒ **le récepteur H.264 de TurboHQ devient testable en VM**, ce qui n'était pas le cas.
+   ⇒ mais **le piège 6 n'est PAS un problème de build** : le canvas WebGPU ne se composite
+   pas davantage sous le vrai Chrome. C'est bien SwiftShader/headless, pas Chromium.
+
+   Bascule dans nos bancs : `PXL_BROWSER=chrome node <banc>` (`webgpu_harness.mjs`).
+
+   ⚠️ **Ça ne survit pas au recyclage** — comme tout ce qui vit hors du workdir. La recette
+   ci-dessus est à rejouer à chaque session qui en a besoin.
+
 ### La division du travail
 
 | Étage | Où | Quoi |
@@ -941,6 +1005,8 @@ Trois choses apprises, et la troisième est la vraie leçon :
 | Localiser la VM | metadata bloquée (§1, §3) |
 | **Autoriser un serveur MCP en OAuth** | le flux est interactif ; en session non-interactive c'est impossible. Vu le 01/08 sur le connecteur Canva. ⇒ passe par les réglages claude.ai de l'utilisateur |
 | Plafonner la VRAM par un flag Chromium | §6 piège 4 |
+| **Afficher un canvas WebGPU** (et donc tester un rendu à l'écran) | §6 piège 6 — présenter perd le device |
+| **HEVC en WebCodecs** | §6 piège 7 — même le vrai Chrome ne l'embarque pas sous Linux |
 
 > ⚠️ **Ce qui n'a pas sa place dans ce tableau : les tunnels sortants.** Cloudflare Tunnel
 > échoue (§3 bis) et Tailscale ne passe qu'en relais DERP — mais **parce que l'egress est
@@ -1071,7 +1137,8 @@ Trois choses apprises, et la troisième est la vraie leçon :
 `--full` pour lancer réellement les deux clients) · `add_repo` + clone de `pxl-airlink` et
 `PXL-SPOUT-TurboHQ` en cours de session (02/08, §4 bis — pas de sonde : deux appels d'outil,
 rejouables tels quels) · `probes/webgpu_probe.mjs`,
-`probes/vram_probe.mjs` (25-26/07) · relevés de cycle de vie des 26-27/07, repris de
+`probes/vram_probe.mjs` (25-26/07) · **`probes/webgpu_canvas_probe.mjs` (28/08)** ·
+relevés de cycle de vie des 26-27/07, repris de
 `PXL-Tape/v3/tests/investigations/note_vm_lifecycle.md`.
 
 **Documentation** — [Claude Code on the web](https://code.claude.com/docs/en/claude-code-on-the-web)
