@@ -154,7 +154,29 @@
 	// privée mourrait avec la VM (le workdir ne survit pas) et la versionner
 	// publierait un secret. Il faudrait la régénérer à chaque réveil. C'est
 	// exactement le raisonnement qui a fait choisir `TS_AUTHKEY` pour le tunnel.
+	//
+	// ✅ **OUVERT LE 29/08 AU SOIR** — Eliott a posé les DEUX moitiés (le bloc
+	// ci-dessous, et `tailscale set --ssh` sur la carte). Mesuré depuis la VM :
+	// `radxa` · `rock-5b` · `radxa,rock-5b rockchip,rk3588` · `6.1.43-15-rk2312`.
+	// ⭐ Les deux moitiés ayant été posées l'une APRÈS l'autre, on a vu que les
+	// deux échecs ne se ressemblent pas — et c'est un instrument de diagnostic :
+	//   · `No ED25519 host key is known… verification failed`
+	//       ⇒ Tailscale SSH n'est pas actif **sur la carte** (on est retombé sur
+	//         le client `ssh` du système) ;
+	//   · `tailscale: tailnet policy does not permit you to SSH to this node`
+	//       ⇒ il est actif, et c'est **cette policy** qui manque.
+	// *Un message d'erreur qui change de nature dit de quel côté chercher.*
 	"ssh": [
+		// ⭐⭐ LA VM → LA CARTE. `accept`, pas `check` : voir ci-dessus.
+		// ⚠️ Ce bloc S'AJOUTE à celui d'origine, il ne le remplace pas — celui-là
+		// sert les machines non taguées d'Eliott et n'a aucune raison de bouger.
+		{
+			"action": "accept",
+			"src":    ["tag:pxl-vm"],
+			"dst":    ["tag:pxl-dev"],
+			"users":  ["radxa", "root"],
+		},
+
 		{
 			"action": "check",
 			"src":    ["autogroup:member"],

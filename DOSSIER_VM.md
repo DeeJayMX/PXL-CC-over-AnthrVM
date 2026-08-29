@@ -938,15 +938,71 @@ la VM (le workdir ne survit pas) et la versionner publierait un secret — il fa
 régénérer à chaque réveil. C'est exactement le raisonnement qui avait fait choisir `TS_AUTHKEY`
 pour le tunnel (errata 8).
 
+### ⭐⭐ AJOUT, une heure plus tard le 29/08 — le SSH s'est ouvert, et le MESSAGE D'ERREUR disait laquelle des deux moitiés manquait
+
+Le paragraphe ci-dessus annonce le SSH fermé. **Il l'était à sa rédaction ; il ne l'est plus.**
+Eliott a posé les deux moitiés, et il les a posées **l'une après l'autre** — ce qui a rendu
+visible un discriminant qu'on n'aurait pas vu autrement :
+
+| état | ce que rend `tailscale ssh` | ce que ça dit |
+|---|---|---|
+| départ | `No ED25519 host key is known… Host key verification failed` | **Tailscale SSH n'est pas actif sur la carte** — on est retombé sur le client `ssh` du système |
+| après `tailscale set --ssh` **sur la carte** | `tailscale: tailnet policy does not permit you to SSH to this node` | ⭐ **c'est Tailscale SSH qui répond** : la moitié carte est faite, il manque la policy |
+| après le bloc `ssh` dans la policy | `radxa` · `rock-5b` · `radxa,rock-5b rockchip,rk3588` · `6.1.43-15-rk2312` | ouvert |
+
+⭐⭐ **Les deux échecs ne se ressemblent pas, et c'est ça qui est utile** : un échec de clé d'hôte
+dit *« Tailscale SSH n'est pas en jeu »* (donc le manque est **sur la carte**), un refus de policy
+dit *« il est en jeu et la règle manque »* (donc le manque est **dans la console d'admin**). Sans
+cette lecture on tâtonne entre deux machines. *Un message d'erreur qui change de nature est un
+instrument, pas une nuisance.*
+⚠️ Et le bloc `ssh` s'AJOUTE à côté de celui en `check` sur `autogroup:self`, il ne le remplace
+pas : celui-là sert les machines non taguées et n'a aucune raison de bouger.
+
+⭐ **Vérifié au passage, et c'est le § 0 de `CAPACITES-CARTE.md` appliqué depuis la VM** :
+`cat /proc/device-tree/compatible` rend **`radxa,rock-5b`** — un Rock 5B, pas un 5B+ — et
+`uname -r` rend **`6.1.43-15-rk2312`**. Les deux concordent avec ce que le dépôt Switcher
+consigne. *La toute première commande passée sur une machine neuve est celle qui dit sur quelle
+machine on est.*
+
+### ⭐⭐ La recette : piloter le desk depuis la VM **sans que le mot de passe sorte de la carte**
+
+Le desk s'atteint par la console HTTP, et elle demande une session. 🔴 **Le mot de passe ne
+transite pas** : on exécute le tout **sur la carte**, par `ssh … 'bash -s' <<'FIN'`, et `curl`
+parle à `127.0.0.1:8710`. Rien de secret n'entre jamais dans un transcript — c'est la correction
+directe de la clé publiée le même jour (`MISTAKE.md` 13).
+
+🔴 **Quatre pièges, tous payés le 29/08, tous silencieux :**
+
+1. **`set -a` avant de sourcer.** `/etc/default/pxl-console` pose `PXL_CONSOLE_MOTDEPASSE=…`
+   **sans `export`** — c'est une variable de shell, invisible d'un `node` fils. Symptôme :
+   `login -> 400`.
+2. **Le mot de passe par STDIN, jamais par `argv`.** `curl --data @-`, pas `-d "…$VAR…"` :
+   `ps` montre la ligne de commande de tout processus.
+3. **L'enveloppe est `{"command":…,"args":{}}`**, pas `{"type":…}`. Une mauvaise enveloppe rend
+   `ok:false, reason:"unknown command: undefined"` — franc, au moins.
+4. 🔴🔴 **L'état est sous `state`** : `snapshot()` rend `{state, render, notes, budgets, …}`, donc
+   `s.state.compositions`. Lire `s.compositions` avec un `|| {}` rend **« desk vide »** au lieu
+   d'échouer, et l'AVANT comme l'APRÈS concordent sur l'empreinte de `{}`. Détaillé en
+   `MISTAKE.md` motif 2 — **ne jamais replier sur un relevé qui sert de référence, exiger.**
+
+⭐ **Le protocole de geste, et il n'est pas négociable sur un desk en service** : empreinte des
+deux compositions **avant**, commande, empreinte **après**. *Un `ok:true` sans changement est
+indiscernable d'une commande qui a marché.* Mesuré ce jour-là — un `cut` échange bien les deux
+bus (`c7c0b07d44c5` ⇄ `61a457851f3d`), et un `auto` **passe par des valeurs intermédiaires**
+(`tbar` 1,1 · 16,0 · 60,6 · 91,8 · 99,9) avant d'échanger : c'est ce qui le distingue d'un CUT
+déguisé. ⚠️ **La FORME de la courbe, elle, n'est pas mesurée** — les cinq points ne sont pas
+horodatés et la latence de chaque requête est inconnue ; en déduire « c'est bien la cubique »
+serait inventer une mesure.
+
 ### Ce qui est utilisable dès maintenant
 
-`~/.ssh/config` porte un hôte `pxl-tx` dont le `ProxyCommand` est `tailscale nc` — donc le jour
-où il y a un credential, `ssh pxl-tx` marche sans rien d'autre à câbler. Et **la console de la
-carte répond déjà** sur 8710 ; il n'y manque que `PXL_CONSOLE_MOTDEPASSE`, absente de
-l'environnement de cette VM.
+`~/.ssh/config` porte un hôte `pxl-tx` dont le `ProxyCommand` est `tailscale nc` — utile pour
+tout ce qui n'est pas SSH, et pour un repli par clé si Tailscale SSH tombe.
 
-⚠️ *Ces deux manques sont des **credentials**, pas des chemins réseau : le réseau, lui, est
-mesuré et il passe.*
+⭐ **Depuis l'ajout ci-dessus, la voie normale est `tailscale ssh radxa@100.94.64.107`** : aucune
+clé à gérer, l'identité vient du tailnet, et **ça survit au recyclage de la VM** — ce qu'une paire
+de clés ne fait pas, sa moitié privée mourant avec le workdir. C'est le même raisonnement que
+`TS_AUTHKEY` pour le tunnel (errata 8).
 
 ---
 

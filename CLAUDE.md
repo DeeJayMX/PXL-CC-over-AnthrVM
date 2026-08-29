@@ -118,10 +118,22 @@ Détaillé dans `DOSSIER_VM.md` §4 et §7 — les pièges qui coûtent le plus 
   se confondent en « ça ne marche pas ».
   ⚠️ **Et `timeout … | head` rend le code de `head`** : la première sonde annonçait `rc=0` sur
   cinq ports dont deux étaient dropés — une victoire fausse.
-  🔴 **Le SSH reste fermé et le TAG en est la cause** : le bloc `ssh` du tailnet vise
-  `autogroup:self`, dont une machine taguée ne fait jamais partie. Il faut une règle `ssh` en
-  **`accept`** (jamais `check` — il demande une ré-auth humaine) **et** `tailscale set --ssh`
-  sur la carte. 🎯 Ouvrir un port n'allume rien derrière : 443/8443 sont ouverts et **vides**.
+  ⭐⭐ **Le SSH est OUVERT depuis le 29/08 au soir** — `tailscale ssh radxa@100.94.64.107`. Il a
+  fallu **les deux moitiés** : `tailscale set --ssh` sur la carte **et** un bloc `ssh` en
+  **`accept`** (jamais `check` — il demande une ré-auth humaine dans un navigateur, et personne
+  n'est devant cette VM), `src: tag:pxl-vm` → `dst: tag:pxl-dev`. ⭐ **Les deux échecs ne se
+  ressemblent pas, et c'est le diagnostic** : « host key verification failed » ⇒ Tailscale SSH
+  n'est pas actif **sur la carte** ; « tailnet policy does not permit… » ⇒ il l'est, et c'est **la
+  policy** qui manque. 🎯 Ouvrir un port n'allume rien derrière : 443/8443 sont ouverts et **vides**.
+- ⭐⭐ **PILOTER LE DESK sans faire sortir le mot de passe de la carte** (§ 3 sexies) : tout
+  s'exécute *sur* la carte (`ssh … 'bash -s' <<'FIN'`) et `curl` parle à `127.0.0.1:8710`.
+  🔴 Quatre pièges, tous silencieux : **`set -a`** avant de sourcer `/etc/default/pxl-console`
+  (un fichier `default` n'exporte pas) · mot de passe par **STDIN** (`curl --data @-`, jamais
+  `argv`, que `ps` montre) · l'enveloppe est **`{"command":…,"args":{}}`** · et 🔴🔴 l'état est
+  sous **`s.state.compositions`** — lire `s.compositions` avec un `|| {}` rend « desk vide » au
+  lieu d'échouer, AVANT et APRÈS concordant alors sur l'empreinte de `{}`.
+  ⚠️ **Sur un desk en service : empreinte des deux compositions avant, commande, empreinte après.**
+  Un `ok:true` sans changement est indiscernable d'une commande qui a marché.
 - **Chromium** : contexte sécurisé obligatoire (`http://127.0.0.1:<port>`, pas `about:blank`),
   et Chromium hérite de `HTTPS_PROXY` ⇒ `proxy: {server: 'direct://'}`. Binaire stable :
   `/opt/pw-browsers/chromium` (lien symbolique — ne pas versionner la révision). Ne pas lancer
