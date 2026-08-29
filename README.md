@@ -18,6 +18,10 @@ mesurés dans ce dossier ([`DOSSIER_VM.md`](DOSSIER_VM.md) §4), qui se refermen
 2. ~~**Attacher un dépôt à une session déjà lancée l'est aussi**~~ — **infirmé le 02/08**
    (§4 bis, errata 7) : `add_repo` attache bel et bien un dépôt en cours de session. Le verrou
    n'a jamais été mesuré, seulement rapporté, et il a été cru.
+   ⭐ **Re-mesuré le 18/08 et confirmé** — trois fois de l'intérieur, clone + register + push
+   compris (errata 11). ⚠️ Le résidu qui reste non vérifié est étroit : attacher un dépôt **créé
+   pendant** la session. Le récit d'origine reste vrai à sa date, et c'est tout l'intérêt de
+   dater.
 
 ⇒ Le premier verrou tient : **aucune séquence ne part de rien et n'aboutit à du contenu poussé
 dans un dépôt neuf en une seule session cloud** — mais c'est désormais la *création* seule qui

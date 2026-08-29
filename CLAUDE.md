@@ -61,11 +61,20 @@ Détaillé dans `DOSSIER_VM.md` §4 et §7 — les pièges qui coûtent le plus 
   de suspecter son propre code. Ne jamais désactiver la vérification TLS ni retirer
   `HTTPS_PROXY` pour contourner. ⚠️ Son `recentRelayFailures` a un angle mort — il est resté
   vide sur des connexions pendues (§3 bis, errata 6). Champ vide ≠ pas d'échec.
-- **Tunnels sortants** : l'egress est restreint à **TCP/80, TCP/443, UDP/53** (mesuré 02/08,
-  `probes/tunnel_probe.sh`). Tailscale passe **en relais DERP seulement** (`--auth-key`,
-  l'auth interactive est hors d'atteinte) ; Cloudflare Tunnel **ne passe pas** (port 7844). Tout
-  client dont le plan de données ne sait pas se replier sur TCP/443 est mort — ne pas le tester.
-  Attention : les deux rendent un **plan de contrôle qui réussit** avant d'échouer.
+- 🔴 **Tunnels sortants — LE FILTRE A CHANGÉ DE NATURE, et ce fichier l'a annoncé faux pendant
+  un mois.** Il disait *« l'egress est restreint à TCP/80, TCP/443, UDP/53 »* (mesuré 02/08),
+  ce qui était vrai à cette date. **Mesuré le 19/08** : le filtrage est désormais **par HÔTE**,
+  par une passerelle TLS d'Anthropic qui lit le **SNI** et rend un 403 nommant l'hôte refusé
+  (`Host not in allowlist: …`). Témoins : `pypi.org` → 200, `example.com` → **403**.
+  ⇒ **Le repli DERP-sur-443 ne contourne donc plus rien** : `derp*.tailscale.com:443` est refusé
+  au même titre. Le remède n'est pas du code — il faut ajouter `*.tailscale.com` (au minimum
+  `controlplane.` + `derp*.` + `log.`) dans **Network egress settings** de l'environnement.
+  ⚠️ Et ces réglages **ne sont PAS figés au démarrage** : un ajout fait depuis l'interface WEB
+  s'applique en direct aux sessions vivantes (errata 12). Voir § 3 du dossier.
+  ⚠️ Cloudflare Tunnel **ne passe pas** (port 7844). Les deux rendent un **plan de contrôle qui
+  réussit** avant d'échouer.
+  🔴 *Ce fait était mesuré et poussé depuis le 19/08 ; il est resté un mois dans une branche que
+  j'avais refusé de fusionner sur un diff lu à l'envers — errata 16.*
 - **Remonter le tunnel dans une VM neuve** : `bash tunnel_up.sh [port]` (§3 ter). 🔴 La clé de
   nœud n'est pas persistable — le workdir disparaît, et la versionner publierait un secret.
   C'est `TS_AUTHKEY` qui survit, dans les variables d'environnement de l'environnement Claude

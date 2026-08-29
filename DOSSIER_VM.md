@@ -92,6 +92,72 @@ mauvaise opération.
 4. **Diagnostic d'identité** : `probes/vm_survey.sh --canary` en début de session. Le canari
    présent ⇒ workdir survivant ; absent ⇒ VM neuve.
 5. Le **scratchpad** sert de boîte noire trans-VM (logs d'expérience, artefacts de session).
+6. **Nuit ou absence longue** (20/08) : armer les réveils **avant** — une Routine de garde
+   auto-réarmante (~45 min) par session, plus, chez un orchestrateur, **un trigger de réveil
+   par session pilotée** (voir la nuit du 19-20/08 ci-dessous : c'est le seul mécanisme qui a
+   ressuscité le banc). Accepter d'avance la perte de tout état en mémoire.
+
+### 🌙 La nuit du 19-20/08 — l'endurance multi-VM, mesurée en vraie grandeur
+
+Le banc : trois VM (une tour d'orchestration + deux labos), des flux vidéo permanents en
+duplex croisé sur le tailnet, mission « rien ne s'arrête jusqu'au matin ». Résultat brut :
+**les trois conteneurs sont morts dans la première heure** (labo A ~23:45Z, labo B ~00:20Z,
+la tour coupée en plein tour vers 23:46Z) et rien n'a tourné jusqu'au réveil manuel à 06:10Z.
+Dernier commit de la nuit : 23:48Z. Ce que la nuit enseigne, dans l'ordre des dégâts :
+
+- **Les nœuds tailscale éphémères meurent DEUX fois.** Un nœud hors ligne est *supprimé* du
+  tailnet (clé éphémère) — et une longue absence **expire l'enregistrement** : au retour, le
+  nœud est *logged out* et la configuration `tailscale serve` est **effacée**. Le remontage
+  n'est donc jamais « relancer tailscaled » : c'est `tailscale up --authkey` complet + re-`serve`.
+  Procédure scriptée dans `PXL-TurboHQ` (branche transport-lab, `lab/remount_a.sh`).
+  L'état local (`tailscaled.state`) survivant dans le workdir redonne la **même IP** — seuls
+  l'enregistrement côté plan de contrôle et le serve expirent.
+- **Une tâche suivie par le harnais ne maintient PAS le conteneur en vie une nuit.** La tour
+  avait un Monitor persistant actif : son conteneur a redémarré quand même. La règle 2 protège
+  la *sémantique* (notification, reprise) — pas la machine. L'ancienne note « `run_in_background`
+  = VM maintenue ≥ 1 h » est un ordre de grandeur, pas un contrat, et ne s'étend pas à 6 h.
+- **Un tour peut enjamber un redémarrage — avec des heures au milieu.** Le tour de 23:46Z de la
+  tour a été coupé après son premier appel d'outil (parti à 23:46) ; à la reprise de session,
+  les appels restants ont exécuté à **06:10Z**. Les actions d'un même tour ne sont pas
+  simultanées : écrire les enchaînements critiques de façon idempotente, et dater ce qu'on
+  envoie (un « ordre de nuit » livré au matin sème la confusion).
+- **Les tours déclenchés par trigger n'ont pas les outils MCP** (confirmé en vraie grandeur) :
+  une session réveillée par Routine ne peut pas armer son propre `send_later` dans ce tour-là.
+  Parade des labos : garde-fou en tâche harnais (une mort du process réveille la session) et
+  `send_later` armé depuis un tour *interactif*. Piège supplémentaire vu au matin : une demande
+  d'**approbation MCP** en attente bloque silencieusement le `send_later` d'une session — le
+  garde-fou qu'on croit armé ne l'est pas.
+- **Ce qui a marché** : la chaîne de résurrection côté serveur. Le watchdog mutuel des labos a
+  daté les chutes ; la tour tenait **un trigger de réveil pré-créé par session** (créés avant la
+  nuit, prompt de remontage complet) ; deux `fire_trigger` au matin ont tout relevé en ~15 min,
+  y compris après un second recyclage du labo A à ~06:15Z. Et le workdir a tenu sa promesse :
+  binaires Go, clones, `tailscaled.state` et sondes `.idx` de la nuit étaient encore là — le
+  post-mortem est possible parce que les sondes écrivaient **sur disque**, pas en mémoire.
+
+### ⏰ L'horloge de la VM — livrée à elle-même (sondé le 20/08, 3 VM)
+
+**La wall-clock d'une VM n'est disciplinée par rien.** Sondes concordantes sur trois VM du
+même environnement :
+
+- **Dans la VM** : aucun démon de temps (ni chronyd, ni ntpd, ni systemd-timesyncd — pas de
+  systemd tout court), pas de `/dev/ptp*`, pas de chargement de module possible (`modprobe`
+  absent) donc pas de `ptp_kvm` pour lire l'horloge de l'hyperviseur. Clocksource `tsc`
+  (`kvm-clock` disponible mais non utilisé). L'horloge est posée au boot puis **dérive seule**
+  — et vite : **~125 ppm mesurés** sur l'une des trois VM (≈ 11 s/jour), par suivi d'offset
+  min-RTT sur 40 min.
+- **Vers l'extérieur** : aucune heure vraie atteignable — NTP public (UDP 123) bloqué par
+  l'egress, NTS (TCP 4460) bloqué, et l'en-tête `Date` HTTPS à travers le proxy vaut entre
+  ±150 ms et ±0,5 s avec des sources qui se **contredisent** (google et github : intervalles
+  disjoints — granularité 1 s + latence proxy asymétrique).
+- **Conséquence mesurée** : étalement de **~0,3 s entre trois VM** du même environnement
+  (offsets muraux mesurés min-RTT : +74,5 ms entre les deux labos, −277 ms tour↔labo, miroirs
+  vérifiés à 1 ms près dans les deux sens). Toute comparaison de timestamps muraux entre VM
+  est donc **fausse de dizaines à centaines de ms** — les latences aller simple inter-VM
+  n'ont aucun sens sans correction (on a mesuré des latences *négatives*).
+- **La parade** : une synchro applicative maître/mesh (offset NTP-lite min-RTT sur
+  `/api/time`, ±0,5 ms en local, ±rtt/2 en relayé) — spec `CLOCK.md` et classement complet
+  des sources d'heure dans `PXL-TurboHQ/pxl-turbohq-client/` (`CLOCK_SOURCES.md`). Les
+  mesures aller-retour (RTT/2), elles, restent justes sans rien : une seule horloge mesure.
 
 ---
 
@@ -120,6 +186,30 @@ CA bundle en `/root/.ccr/ca-bundle.crt`, `NODE_EXTRA_CA_CERTS` déjà pointé de
 > ```
 > Ce n'est donc pas un simple tunnel : c'est un **point d'application de politique**, qui
 > connaît le périmètre de la session. Retenir la formulation — elle explique le §4.
+
+> 🔴🔴 **ERRATUM MAJEUR (19/08) : la règle « par port » du §3 bis (02/08) est OBSOLÈTE — la
+> couche d'egress est devenue une passerelle TLS interceptante à liste d'hôtes.** Mesuré dans le
+> MÊME environnement que le 03/08 :
+>
+> - en dial **direct** (hors `HTTPS_PROXY`), `controlplane.tailscale.com:443` connecte en 4 ms
+>   (impossible pour la vraie côte Est — c'est un intercepteur local) et rend **HTTP 403** avec
+>   un certificat émis par **`O=Anthropic, CN=Egress Gateway SDS Issuing CA (production)`** ;
+> - le corps du 403 dit tout : *« Host not in allowlist: controlplane.tailscale.com. **Add this
+>   host to your network egress settings** to allow access. »* ;
+> - témoins : `pypi.org` direct → 200 ; `example.com` direct → 403. **Filtrage par HÔTE, plus
+>   par port.** Les relais DERP (`derp*.tailscale.com:443`) sont 403 au même titre — le repli
+>   DERP-sur-443 du §3 bis ne contourne plus rien, la couche du dessous lit désormais le SNI.
+>
+> ⇒ Le remède n'est PAS du code : ajouter `*.tailscale.com` (au minimum `controlplane.` +
+> `derp*.` + `log.`) dans **Network egress settings** de l'environnement (claude.ai/code →
+> nuage → roue dentée). Le proxy de session, lui, refuse aussi (`connect_rejected … policy
+> denial` dans `recentRelayFailures`) — les deux étages obéissent au même réglage.
+>
+> Contournement partiel toujours valable : quand seul le TÉLÉCHARGEMENT est bloqué
+> (`pkgs.tailscale.com`), `go install tailscale.com/cmd/tailscale{,d}@v1.98.10` compile les
+> binaires en ~3 min via `proxy.golang.org` (dans la `noProxy`, donc toujours ouvert — Go
+> 1.24.7 préinstallé). Mais tant que `controlplane.tailscale.com` est refusé, le nœud ne
+> s'authentifiera jamais : inutile d'insister côté code.
 
 ---
 
@@ -801,14 +891,25 @@ Il n'y a **pas de `gh` CLI**. Deux chemins seulement, et **ils n'ont pas les mê
 **Périmètre — le second verrou, et il enferme.** La session est liée à une liste de dépôts
 fixée **au démarrage de la VM**.
 
-> 🔴 **Un dépôt ne peut pas être attaché à une session déjà lancée** (rapporté par Eliott le
-> 01/08 ; non vérifié de l'intérieur, `add_repo` n'ayant pas été appelé). L'outil `add_repo`
-> existe et sa description annonce l'inverse — **ne pas s'y fier**.
+> 🔴 ~~**Un dépôt ne peut pas être attaché à une session déjà lancée**~~ (rapporté par Eliott le
+> 01/08 ; non vérifié de l'intérieur, `add_repo` n'ayant pas été appelé).
+>
+> ✅ **CORRIGÉ — mesuré de l'intérieur le 18/08, trois fois** : `add_repo` a attaché
+> `PXL-TurboHQ` (accès push, **pushes vers master réussis** dans la même session),
+> `PXL-Switcher` et `PXL-CC-over-AnthrVM` — clone, `register_repo_root`, lecture ET écriture,
+> tout dans la session en cours. Le périmètre GitHub n'est PAS figé au démarrage.
+> ⚠️ **La correction est précise, pas totale** : les trois dépôts attachés PRÉEXISTAIENT à la
+> session. Le scénario du 01/08 — un dépôt **créé pendant** la session puis attaché — reste
+> non vérifié (la création elle-même prend toujours 403, donc il faudrait une création humaine
+> en cours de session pour trancher ; la propagation d'installation de l'App est un suspect
+> plausible du refus d'origine). Erratum 6.
 >
 > **Conséquence, et c'est le piège** : les deux verrous se referment l'un sur l'autre. On ne peut
 > pas créer un dépôt depuis la session ; et le dépôt créé à la main pendant la session **reste
 > hors d'atteinte jusqu'à la session suivante**. Il n'existe donc **aucune séquence** qui, en une
 > session, part de rien et aboutit à du contenu poussé dans un dépôt neuf.
+> ⚠️ *18/08 : le second verrou est tombé pour les dépôts préexistants (voir plus haut) — le
+> double-verrou ne tient plus que sur le scénario « créé pendant la session », non re-mesuré.*
 >
 > ⇒ **Le contournement** : écrire le contenu sur une **branche dédiée d'un dépôt déjà attaché**,
 > partant de `main` et n'ajoutant que le dossier — son diff contre `main` *est* le futur dépôt.
@@ -865,7 +966,7 @@ Trois choses apprises, et la troisième est la vraie leçon :
 | Présent | Absent (et ce qu'on fait à la place) |
 |---|---|
 | `git`, `make`, `cmake`, `gcc`, **`clang` 18** | **`gh`** → MCP GitHub (§4) |
-| `node` 22 (`/opt/node22`), `python3`, `rustc`, `go` | **`ffmpeg`** en PATH → un binaire existe sous `/opt/pw-browsers/ffmpeg-*` |
+| `node` 22 (`/opt/node22`), `python3`, `rustc`, `go` | **`ffmpeg`** en PATH → ⭐ **`apt-get update && apt-get install -y ffmpeg` MARCHE** (mesuré 18/08) : 6.1.1 **avec libx264, libx265, libopus**. ⚠️ Sans le `update` d'abord, l'install échoue sur des index périmés (404). Le binaire `/opt/pw-browsers/ffmpeg-*` reste le repli sans réseau |
 | **`docker`** | **`aarch64-linux-gnu-gcc`** → ⭐ voir ci-dessous |
 | Chromium + Playwright (§6) | **`qemu-aarch64`** → ⇒ **rien d'ARM ne peut être *exécuté*** |
 
@@ -895,6 +996,10 @@ Trois choses apprises, et la troisième est la vraie leçon :
 | **WebGPU** | ✅ via **SwiftShader** (adapter « google / swiftshader », Vulkan logiciel). Pipeline compute WGSL complet validé, readback correct, textures `r8unorm`/`rg8unorm` 1080p |
 | **WebCodecs — VP9, AV1** | ✅ décodeurs logiciels |
 | **WebCodecs — H.264/HEVC** | ❌ build sans codecs propriétaires, aucun matériel |
+| **VideoENCODER** (mesuré 18/08, `isConfigSupported`) | AV1 ✅ · VP9 ✅ · **H.264 ❌ · HEVC ❌** — et l'encodeur AV1 **n'émet PAS de `decoderConfig.description`** (flux auto-décrit ; tout muxeur doit synthétiser l'av1C) |
+| **AudioEncoder** (18/08) | **Opus ✅ · AAC ❌** |
+| **File System Access** (18/08) | ❌ `showDirectoryPicker` absent en headless — se mocke par `addInitScript` (write/close/getFile suffisent pour un banc d'enregistreur) |
+| **getUserMedia** (18/08) | ✅ avec `--use-fake-device-for-media-stream --use-fake-ui-for-media-stream` — caméra + micro factices, pipeline WebCodecs complet dessus |
 | Allocation « VRAM » | 1 500 slots NV12 1080p (**~4,7 Go**) sans OOM — la « VRAM » **est** la RAM du conteneur |
 
 ### Les pièges, déjà payés
@@ -989,7 +1094,8 @@ Trois choses apprises, et la troisième est la vraie leçon :
 |---|---|---|
 | Logique pure | VM (node) | maths, bookkeeping, property tests, simulateurs |
 | Fonctionnel complet | VM (Chromium headless, média **VP9/AV1** basse rés) | comportement — **pas** la performance |
-| Vérité physique | **Machine locale** | H.264/HEVC, GPU réel, NVDEC, timings, 4K |
+| **Bitstream/conteneur H.264-HEVC** | VM (**ffmpeg apt + x264/x265**, 18/08) | protocole, muxage, remux — `-err_detect explode -f null` fait foi. C'est ce qui a validé toute la chaîne thq-publish/record/ingest en vrais codecs |
+| Vérité physique | **Machine locale** | H.264/HEVC **matériels**, GPU réel, NVDEC, timings, 4K |
 
 ---
 
@@ -1129,6 +1235,93 @@ Trois choses apprises, et la troisième est la vraie leçon :
    **Leçon : avant de conclure d'un compteur ou d'un code de retour, établir ce qu'il compte et
    ce qu'il ne compte pas.** Un zéro n'est une absence que si on sait ce qu'il mesure.
 
+⚠️ **Les errata 11 à 15 viennent de la branche `claude/mesures-2026-08-18`, fusionnée le
+29/08.** Ils portaient les numéros 6 à 10 chez elle : les deux lignes de travail ont numéroté
+en parallèle, et **rien n'a été retiré de part et d'autre** — c'est la règle du dossier. Le
+renumérotage est le prix du parallélisme, pas une réécriture.
+🔴 **Et la branche portait une correction MAJEURE qui n'est pas dans cette liste** : l'egress
+n'est plus filtré par PORT mais par **HÔTE** (passerelle TLS lisant le SNI) — c'est au § 3, pas
+ici. L'errata 12 en est le corollaire : les réglages d'egress ne sont **pas** figés au démarrage.
+Les deux sont restés un mois dans une branche non fusionnée — voir l'errata 16.
+
+11. ❌ **L'erratum 3 s'est trompé dans l'autre sens.** « Le périmètre est figé au démarrage de
+   la VM » — mesuré le 18/08 : **`add_repo` attache bel et bien des dépôts en cours de
+   session**, trois fois, clone + register + pushes vers master compris. La correction du 01/08
+   avait généralisé UN échec (un dépôt créé pendant la session) en une politique (« le périmètre
+   est figé ») — sans mesurer l'attachement d'un dépôt préexistant, qui est le cas courant.
+   **Leçon : corriger une erreur avec un énoncé plus large que la mesure qui le fonde, c'est
+   préparer l'erratum suivant.** Le résidu exact qui reste non vérifié : attacher un dépôt créé
+   PENDANT la session (propagation d'installation de l'App suspectée). Et l'environnement a pu
+   changer entre le 01/08 et le 18/08 — les deux mesures peuvent avoir été justes chacune à sa
+   date ; c'est indécidable rétroactivement, et c'est une raison de plus de dater tout.
+
+12. ❌ **« Les réglages egress sont figés au démarrage de la session. »** (19/08, appuyé sur une
+   sonde de 10 min restée en 403 après un ajout d'allowlist) Mesuré le 20/08 : **un ajout fait
+   depuis l'interface WEB s'applique EN DIRECT aux sessions vivantes** — `pkgs.tailscale.com`
+   puis trois hôtes d'heure sont passés de 403 à 200 en pleine session, sans redémarrage.
+   Explication d'Eliott (à re-vérifier proprement un jour) : le comportement dépend de
+   l'INTERFACE — un changement depuis l'appli mobile ne se propage pas aux sessions en cours,
+   depuis le web si. La sonde du 19/08 mesurait donc probablement un ajout fait au mobile.
+   **Leçon : « la config est figée » était encore un énoncé plus large que sa mesure — le
+   chemin par lequel une config est modifiée fait partie des variables de l'expérience.**
+   *Résidu du 20/08 :* la propagation web-en-direct n'est pas non plus uniforme — sur trois
+   VM du même environnement, deux ont vu l'ouverture immédiatement, la troisième est restée
+   en 403 **y compris après une re-sauvegarde** de l'environnement (re-testé 2×, 09:25:35Z).
+   Aucune variable discriminante identifiée (même env, sessions du même matin). À re-mesurer
+   au prochain recyclage de cette VM ; d'ici là, l'énoncé honnête est « s'applique en direct
+   *souvent*, pas toujours ».
+
+13. ❌ **`pkill -f` (et `pgrep -f`) se tuent eux-mêmes depuis un appel d'outil.** (22/08, payé
+   DEUX fois dans la même séance — exit 144, le tour meurt net et tout ce qui suivait dans la
+   commande composée n'a jamais tourné.) Le harnais lance chaque commande via
+   `/bin/bash -c "<toute la commande composée>"` : la ligne de commande du shell CONTIENT donc
+   le motif littéral (`pkill -f "server_turbohq.mjs 8080"` → le shell se matche lui-même).
+   **Parades, par ordre de sûreté :** tuer par PID relevé AVANT (`ss -tlnp`, fichier PID) ;
+   `pkill -x` (nom exact du binaire, pas la ligne) ; ou couper le motif dans le source pour
+   qu'il n'apparaisse pas littéralement (`pgrep -f 'server_turbo''hq.mjs'` — le process node
+   matche, la ligne du shell qui porte les quotes non). **Leçon : dans une VM harnais, le
+   process le plus proche du motif est TOI.**
+
+14. ❌ **Le `cd` en tête de commande composée casse tous les chemins relatifs qui suivent.**
+   (Récidive au moins 5 fois entre le 19 et le 22/08 — « fatal: pathspec 'v3/turbohq' »,
+   « diff: v3/turbohq: No such file ».) Le motif : `cd /workspace/<autre-dépôt> && … && node
+   v3/turbohq_attach.mjs …` — l'outil d'attache et les diffs de contrôle sont écrits pour être
+   lancés depuis `/home/user/PXL-Tape`. La variante VICIEUSE du 22/08 : l'attache masquée par
+   `>/dev/null 2>&1` a échoué EN SILENCE — le resync n'avait juste pas eu lieu, seul le diff
+   d'après l'a dit. **Parades : chemins absolus partout dans les composées ; jamais de
+   redirection muette sur une étape qui conditionne la suite ; et le harnais remet le cwd à
+   chaque appel (« Shell cwd was reset ») — un `cd` ne « reste » jamais, il ne fait que polluer
+   la commande où il vit.**
+
+15. ❌ **Un `&` shell ne survit pas fiablement à l'appel d'outil — seul `run_in_background`
+    du harnais survit ET réveille.** (Même nuit, même famille que le n°8 : le guetteur MBX
+    relancé par `… & sleep 1` était mort avant la fin de l'appel — la veille qu'on croyait
+    armée ne l'était pas.) Nuance mesurée : un serveur `nohup … &` a survécu plusieurs fois à
+    son appel — la mort n'est pas systématique, elle est INTERMITTENTE, ce qui est pire : un
+    garde-fou qui « marche parfois » n'est pas un garde-fou. Et même survivant, un process
+    shell ne réveille jamais la session ; la tâche harnais (`run_in_background: true`) survit
+    et sa terminaison réveille — c'est LE mécanisme de veille. **Leçon : ce qui doit vivre
+    après le tour, ou réveiller, se confie au harnais, jamais au shell.**
+
+16. ❌ **« La branche `claude/mesures-2026-08-18` supprime 548 lignes du dossier — ne pas la
+    fusionner. »** (22/08) **Faux, et c'est un diff lu à l'envers.** J'avais regardé un diff à
+    **DEUX points** (`git diff HEAD..branche`), qui compare les deux SOMMETS : il affiche donc
+    *nos propres ajouts* comme des suppressions, puisque la branche ne les a pas. Le chiffre
+    était réel — 1944 suppressions au total, dont `tunnel_up.sh` et la policy entiers — et il ne
+    décrivait rien de ce qu'une fusion aurait fait.
+    ⭐ **Le diff à TROIS points** (`git diff HEAD...branche`, depuis la base commune) dit ce
+    qu'une fusion fait vraiment : **+205 / −5**, uniquement des ajouts datés au dossier et au
+    README. Exactement ce que la règle de rédaction prescrit.
+    🔴 **Ce que ça a coûté** : un mois. La branche portait la correction majeure du § 3 —
+    *l'egress est filtré par HÔTE, pas par port* — pendant que le `CLAUDE.md` de ce dépôt
+    continuait d'annoncer **« TCP/80, TCP/443, UDP/53 »** à chaque session. Une mesure juste,
+    poussée, et rendue invisible par un refus de fusion fondé sur un artefact d'affichage.
+    **Leçon : `..` et `...` ne répondent pas à la même question.** Avant de refuser une fusion
+    sur la foi d'un diff, vérifier lequel on lit — et se demander *« ces suppressions sont-elles
+    les MIENNES ? »*, ce qui coûte une commande (`git merge-base`).
+    ⚠️ C'est la famille du motif 8 de `MISTAKE.md` — *un outil mal employé qui juge mon modèle
+    au lieu du sujet* — appliquée à `git` lui-même.
+
 ---
 
 ## 9. Sources
@@ -1147,3 +1340,35 @@ relevés de cycle de vie des 26-27/07, repris de
 **Documents PXL liés** — `PXL-Tape/v3/tests/investigations/note_vm_lifecycle.md` et
 `note_vm_webgpu.md` (les notes d'origine, dont ce dossier est la reprise et la correction) ·
 `PXL-StageBox/jpegxs-arm/README.md` (le banc dont le §1 explique la non-reproductibilité).
+
+## 🤝 « Rendez-vous plutôt que perçage » — le réseau inter-VM, doctrine (20/08)
+
+Question d'Eliott : mettre les IP des VM dans l'allowlist egress pour
+qu'elles se voient en direct ? **Non, trois verrous empilés** : (1)
+l'allowlist est un FILTRE de sorties (noms de domaine), pas un routeur —
+elle ne crée ni route ni écoute entrante ; (2) les conteneurs n'ont AUCUNE
+porte d'entrée (IP privées non routables, rien n'écoute de l'extérieur) ;
+(3) preuve empirique du 19/08 : le hole-punching tailscale — le meilleur
+chercheur de chemin direct du métier — a fait 0 % de direct, 100 % DERP sur
+toutes les paires. S'il existait un chemin, il l'aurait trouvé.
+
+**La doctrine qui en découle : on ne perce pas les murs, on se donne
+rendez-vous dehors.** Deux VM se « voient » via un point de rencontre
+extérieur qu'elles joignent chacune EN SORTANT — et l'allowlist est
+précisément la liste des lieux de rendez-vous autorisés. Trois
+incarnations, du plus bas au plus haut niveau :
+1. **DERP public Tailscale** (l'existant) : ~98 ms de plancher, files
+   partagées, zéro contrôle.
+2. **DERP À SOI sur le VPS OVH** (la recette prête pour le jour des clés) :
+   le binaire officiel `derper` sur le VPS (une heure d'install), son nom
+   de domaine dans l'allowlist (les clients DERP sortent en HTTPS/443 —
+   pile ce que le proxy sait autoriser), déclaré dans la DERP map du
+   tailnet (`derpMap` des ACL). Résultat : tout le trafic inter-VM passe
+   par SON relais — latence d'un VPS bien placé, bande passante à soi,
+   zéro changement dans les logiciels (tailscale route seul).
+3. **Relais applicatif sur le VPS** (TurboHQ/MBX — le « relais désigné »
+   du plan P2P) : mêmes propriétés au niveau flux.
+
+C'est le même théorème que toute la semaine : pas de chemin direct → élire
+un point de rencontre de qualité connue (le grandmaster pour l'heure, le
+relais pour les flux, le DERP à soi pour le tailnet).
