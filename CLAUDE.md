@@ -92,6 +92,21 @@ Détaillé dans `DOSSIER_VM.md` §4 et §7 — les pièges qui coûtent le plus 
   tunnel, idempotent, ~10 s à chaud, sort toujours en 0). Deux variables à poser une fois dans
   l'environnement : `TS_AUTHKEY` et `PXL_CONSOLE_MOTDEPASSE` — sans la seconde, le mot de passe
   de la console est tiré au sort à chaque réveil.
+- 🔴🔴 **AJOUT DU 30/08 — ce hook-là ne s'arme QUE si la session ouvre CE dépôt.** Il est déclaré
+  dans `.claude/settings.json`, donc lu quand le répertoire de projet est
+  `…/PXL-CC-over-AnthrVM`. Quand la session ouvre le **PARENT** (`/home/user`, qui porte les
+  dépôts côte à côte), ce fichier n'est jamais lu et **aucun hook ne tourne** — mesuré ce jour-là
+  sur les hooks de `PXL-Switcher`, par le seul discriminant qui vaille : **donner au hook la
+  commande qu'il doit refuser** (`… | node .claude/hooks/pas-de-pkill-f.mjs` ⇒ `rc=2`) alors que
+  cette même commande venait de s'exécuter sans obstacle. ⚠️ *Un hook non chargé et un hook qui
+  laisse passer sont indiscernables*, et le second est le comportement voulu : le témoin d'un hook
+  qui marche est le silence. 🎯 **Pour ce `SessionStart`-ci la conclusion reste DÉDUITE**, pas
+  mesurée (le même mécanisme, un fichier voisin) — corrobore seulement le fait que le tunnel a dû
+  être remonté à la main le 30/08. ⇒ Le remède est dans l'autre dépôt :
+  `PXL-Switcher/.claude/settings-parent.json`, qui déclare les **quatre** hooks avec les chemins
+  vus depuis le parent, à copier dans `<parent>/.claude/settings.json`. ⚠️ Ce fichier-là n'est
+  versionné nulle part — le workdir disparaît —, donc il se **repose** à chaque VM neuve, comme le
+  tunnel.
 - 🔴 **L'entrant ne passe que si le RELAIS HOME est celui des pairs** (mesuré 03/08, §3 ter).
   La VM est aux USA, elle choisit `nyc` ; un pair européen envoie vers `nyc` et rien n'arrive,
   alors que le sortant marche — asymétrie qui ressemble à une ACL et n'en est pas.
