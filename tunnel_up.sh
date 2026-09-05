@@ -121,8 +121,27 @@ fi
 # ── 4. L'authentification. ⚠️ `--auth-key` est la SEULE entrée : `tailscale up`
 #      ne lit pas TS_AUTHKEY dans son environnement (mesuré, 1.98.10). Voir
 #      l'en-tête pour ce que ça expose et pourquoi c'est accepté ici.
-if $TS status > /dev/null 2>&1; then
-  log "nœud déjà authentifié"
+#      🔴🔴 LA GARDE A ÉTÉ FAUSSE PENDANT TOUT CE TEMPS — mesuré le 05/09.
+#      Elle testait `tailscale status > /dev/null`, qui **sort en 0 sur un nœud
+#      DÉCONNECTÉ** : le démon sert alors sa dernière carte du réseau, donc la
+#      liste des pairs s'affiche, chacun marqué `active`, et le script annonce
+#      « nœud déjà authentifié ». On saute donc la connexion exactement quand
+#      elle est nécessaire.
+#      ⚠️ Et la panne qui en découle ne ressemble pas à une panne
+#      d'authentification : les pairs sont là, le DERP se connecte (200
+#      Connection Established dans le journal), `tailscale nc` part sans
+#      broncher — et **rien ne revient**. Relevé ce jour-là :
+#      `pxl-tx … active, relay "par", tx 7332 rx 0`, `LastHandshake` à zéro,
+#      et les ports DANS la règle d'ACL pendent comme ceux qui n'y sont pas —
+#      c'est-à-dire le symptôme que le § 3 sexies attribue à un refus d'ACL.
+#      *Trois quarts d'heure passés à chercher une asymétrie de relais.*
+#      ⭐ Le seul témoin qui savait était `Self.Online`, à **false**, avec
+#      `Health: ["You are logged out. …"]` juste à côté. Le prédicat est donc
+#      celui-là. `--peers=false` est ce qui le rend sûr : sans lui, `"Online":
+#      true` matcherait n'importe quel PAIR en ligne — la même erreur d'un cran
+#      plus bas.
+if $TS status --json --peers=false 2>/dev/null | grep -qE '"Online":[[:space:]]*true'; then
+  log "nœud déjà authentifié (Self.Online)"
 else
   log "authentification par clé (relais DERP — l'egress interdit le direct)"
   if ! timeout 90 "$DIR/tailscale" --socket="$DIR/ts.sock" up \
@@ -134,6 +153,29 @@ else
     90 jours — ou à usage unique déjà consommée. En régénérer une réutilisable
     et la reposer dans TS_AUTHKEY. Détail : $DIR/tailscaled.log"
   fi
+fi
+
+# ── 4 ter. ⚠️ `up` REND 0 SANS AVOIR CONNECTÉ — mesuré le 05/09, deux fois.
+#      Le premier essai a rendu `rc=0` en laissant `Self.Online = false` et
+#      `register request: … unexpected EOF` dans le journal ; c'est le SUIVANT,
+#      trois minutes plus tard, qui a rendu `machineAuthorized=true`. Un code de
+#      retour ne dit donc pas que l'enregistrement a abouti — on le CONSTATE, et
+#      on laisse au plan de contrôle le temps de répondre. *Même famille que le
+#      `is-active` des déploiements de la carte : on vérifie que ça RÉPOND.*
+for _ in $(seq 1 20); do
+  $TS status --json --peers=false 2>/dev/null | grep -qE '"Online":[[:space:]]*true' && break
+  sleep 2
+done
+if $TS status --json --peers=false 2>/dev/null | grep -qE '"Online":[[:space:]]*true'; then
+  log "nœud EN LIGNE (Self.Online confirmé)"
+else
+  die "le nœud n'est pas en ligne après authentification.
+
+    Ce n'est PAS forcément la clé : relire la ligne « login-state » de
+    $DIR/tailscaled.log. Un « unexpected EOF » sur /machine/register est un
+    échec de TRANSPORT, et il passe souvent au second essai — relancer.
+    Symptôme à reconnaître si on l'ignore : les pairs s'affichent \`active\`,
+    le DERP se connecte, et pourtant \`tx\` monte avec \`rx\` à 0."
 fi
 
 # ── 4 bis. 🔴 LE RELAIS HOME, et c'est LA correction qui a coûté une matinée.

@@ -526,6 +526,59 @@ persiste d'une session à l'autre, c'est `TS_AUTHKEY` et rien d'autre.
 `Self`. Lire une structure avec un outil qui ne la comprend pas marche jusqu'au jour où l'ordre
 des clés change. Il lit maintenant `.Self` avec un parseur JSON, et affiche le tag avec.
 
+### 🔴🔴 Mesuré le 05/09/2026 — LE MÊME SYMPTÔME, UNE AUTRE CAUSE : le nœud était DÉCONNECTÉ
+
+Le relevé du 03/08 ci-dessous décrit le symptôme « sortant OK, entrant nul » et l'attribue au
+relais home. **Ce jour-là ce n'était pas ça**, et la fausse piste a coûté trois quarts d'heure —
+d'autant plus facilement que la section suivante donne une explication qui *colle*.
+
+**Le symptôme.** VM re-provisionnée à 19:15 (workdir survivant, canari présent). `tunnel_up.sh`
+relancé, il annonce **« nœud déjà authentifié »**. `tailscale status` affiche tous les pairs,
+`pxl-tx` marqué `active, relay "par"` — la MÊME région que nous, donc l'explication du 03/08 ne
+s'applique pas. Le journal montre des `derphttp: CONNECT … 200 Connection Established` en
+boucle. Et pourtant : `tailscale nc` pend sur **22 · 8710 · 8443**, `ssh` rend
+*« Connection timed out during banner exchange »*, `tailscale ping` ne rend aucun pong.
+
+⚠️ **Et le contrôle du § 3 sexies ne discriminait pas** : un port HORS règle (9999) pend
+exactement comme les trois ports DANS la règle. C'est précisément la lecture que ce dossier
+range en « refus d'ACL ». *Un contrôle ne vaut que si les deux branches peuvent différer ; ici
+rien ne revenait, donc les deux se ressemblaient.*
+
+⭐ **Le seul témoin qui savait** — et il fallait le `--json`, la sortie humaine ne le porte pas :
+
+```
+Self.Online = false
+Health      = ["You are logged out. The last login error was:
+                register request: Post \"https://controlplane.tailscale.com/machine/register\":
+                unexpected EOF"]
+pxl-tx      = {Online:true, Relay:"par", Tx:7332, Rx:0, LastHandshake:"0001-01-01T00:00:00Z"}
+```
+
+**`Tx` qui monte avec `Rx` à 0 et un `LastHandshake` à l'époque zéro** : nos paquets partent,
+rien ne revient, aucune poignée de main n'a jamais eu lieu. Les pairs affichés `active`
+venaient de la **dernière carte du réseau en cache** — un nœud déconnecté continue de la servir.
+
+🔴🔴 **La cause est dans `tunnel_up.sh`, et c'est une garde qui répond « oui » sans savoir.**
+Elle testait `tailscale status > /dev/null 2>&1`, **qui sort en 0 sur un nœud déconnecté**. Le
+script sautait donc l'authentification exactement quand elle était nécessaire, et l'annonçait :
+*« nœud déjà authentifié »*. ⇒ Le prédicat est désormais `Self.Online`, lu sur
+`status --json --peers=false`. ⚠️ **`--peers=false` n'est pas cosmétique** : sans lui,
+`"Online": true` matcherait n'importe quel PAIR en ligne — la même erreur un cran plus bas.
+✅ Gardé par sabotage dans les deux sens : un JSON de nœud déconnecté est refusé, le nœud
+réellement en ligne est accepté.
+
+⚠️ **Second fait du même jour, indépendant : `tailscale up` REND 0 SANS AVOIR CONNECTÉ.** Le
+premier appel a rendu `rc=0` en laissant `Self.Online = false` ; c'est le suivant, trois minutes
+plus tard, qui a rendu `machineAuthorized=true`. L'`unexpected EOF` sur `/machine/register` est
+un échec de **transport**, pas un refus de clé — il passe au second essai. Le script CONSTATE
+donc l'état après coup (20 essais × 2 s) au lieu de croire le code de retour. *Même famille que
+le `is-active` des déploiements de la carte : on vérifie que ça RÉPOND.*
+
+⚠️ **Ce que ça laisse comme réserve** : une fois en ligne, le lien reste **DERP seul** (aucun
+chemin direct, `CurAddr` vide). Un `ssh` court passe ; un **port-forward `-L` a stalé** au bout
+de quelques dizaines de secondes, donc pas de session navigateur soutenue par ce chemin. Non
+instruit : si c'est le DERP, le forward, ou la charge de la carte.
+
 ### 🔴 Mesuré le 03/08 — pourquoi l'entrant ne passait pas, et ce que ce n'était PAS
 
 Une matinée entière, et la cause n'était aucune de celles qu'on soupçonnait. Elle mérite d'être
