@@ -579,6 +579,38 @@ chemin direct, `CurAddr` vide). Un `ssh` court passe ; un **port-forward `-L` a 
 de quelques dizaines de secondes, donc pas de session navigateur soutenue par ce chemin. Non
 instruit : si c'est le DERP, le forward, ou la charge de la carte.
 
+#### ⚠️ Addendum du même soir, 23:16 — `Self.Online` répond à l'AUTHENTIFICATION, pas à la JOIGNABILITÉ
+
+Trois heures après le correctif ci-dessus, la carte a cessé de répondre une seconde fois, et le
+relevé n'était **pas** celui du cas précédent :
+
+```
+Self.Online   = true          Health = []          BackendState = Running
+magicsock: derp-18 connected  (journal, 22:41)
+pxl-tx        = active, relay "par", tx 1404 … 4909408, rx 0, LastHandshake = 0001-01-01
+```
+
+Nœud authentifié, santé vide, relais connecté — et **aucune poignée de main WireGuard n'avait
+jamais eu lieu** avec le pair depuis que ses compteurs s'étaient remis à zéro. `rx` figé **au
+même octet sur 75 s** pendant que `tx` montait. Eliott, au même moment : *« moi la carte me
+répond toujours »* — donc la carte allait bien, et le défaut était de mon côté seul.
+
+⭐ **Réparé par `tailscale logout` puis `tunnel_up.sh`** (la manœuvre du nœud éphémère). Retour
+immédiat : `ssh` en un essai, `rx 3932`. ⚠️ **Mécanisme non instruit** — je ne sais pas si
+l'enregistrement était périmé côté serveur de coordination, si le netmap du pair avait vieilli,
+ou si les 115 Mo de vidéo tirés par le relais une demi-heure plus tôt y sont pour quelque chose.
+Le fait est écrit tel quel.
+
+🔴 **Ce que ça corrige du paragraphe précédent, et il faut le lire avec** : `Self.Online` est le
+bon prédicat de **« suis-je authentifié ? »**, qui est la question que pose `tunnel_up.sh`, et il
+le reste. Il ne répond **pas** à « puis-je joindre ce pair ? ». Le témoin de celle-là est
+**`LastHandshake` du PAIR** : à l'époque zéro, aucune session n'a jamais été montée, et rien
+d'autre dans la sortie humaine ne le dit.
+⭐ **Et le correctif s'est prouvé en service** : au `logout`, le script a imprimé
+*« authentification par clé »* puis *« nœud EN LIGNE (Self.Online confirmé) »* — là où l'ancienne
+garde aurait annoncé *« nœud déjà authentifié »* et sauté l'étape. *Un correctif dont on voit la
+branche neuve se déclencher sur un vrai incident vaut plus qu'un test qui la simule.*
+
 ### 🔴 Mesuré le 03/08 — pourquoi l'entrant ne passait pas, et ce que ce n'était PAS
 
 Une matinée entière, et la cause n'était aucune de celles qu'on soupçonnait. Elle mérite d'être
