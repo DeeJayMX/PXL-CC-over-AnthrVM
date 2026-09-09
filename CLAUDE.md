@@ -92,6 +92,32 @@ Détaillé dans `DOSSIER_VM.md` §4 et §7 — les pièges qui coûtent le plus 
   tunnel, idempotent, ~10 s à chaud, sort toujours en 0). Deux variables à poser une fois dans
   l'environnement : `TS_AUTHKEY` et `PXL_CONSOLE_MOTDEPASSE` — sans la seconde, le mot de passe
   de la console est tiré au sort à chaque réveil.
+- ⭐⭐ **AJOUT DU 09/09 — ET IL Y A UN SECOND HOOK, PARCE QUE `SessionStart` NE COUVRE PAS LE CAS
+  QUI MORD** (demande d'Eliott : *« tu devrais te faire un hook pour verif tailscale quand la VM
+  repart »*). ✅ **Mesuré ce jour-là : le tunnel est tombé TROIS FOIS en une seule séance, en
+  cours de route, sans que rien ne redémarre** — un `SessionStart` n'en aurait attrapé aucune.
+  Les deux hooks visent donc deux événements différents, et il faut les deux :
+  **SessionStart** → la VM repart, il n'y a jamais eu de tunnel (`session_start.sh`) ·
+  **PreToolUse** → le tunnel est mort SOUS une session vivante
+  (`.claude/hooks/tunnel-vivant.mjs`).
+  ⭐ Il ne sonde que les commandes qui **visent la carte** (`pxl-tx`, `100.94.64.107`,
+  `tailscale nc`, `deployer-carte.sh`) : sonder tous les `Bash` paierait un `status` sur chaque
+  `ls`, et surtout remonterait un tunnel dont on n'a pas besoin.
+  🔴 **Le prédicat est `Self.Online`, JAMAIS le code de retour** — `tailscale status` sort en 0
+  sur un nœud déconnecté (mesuré le 05/09, écrit dans `tunnel_up.sh` l. 124-128). C'est le même
+  prédicat que le script qu'il appelle : deux prédicats pour la même question seraient deux
+  modèles.
+  ⭐ **Ce qu'il supprime n'est pas la panne, c'est la MÉPRISE** : le tunnel mort se lit
+  `failed to connect to local tailscaled` puis `Connection closed by UNKNOWN port 65535`,
+  c'est-à-dire un message qui décrit la VM et qu'on impute à la CARTE.
+  ⚠️ **Il ne bloque JAMAIS**, remontée échouée comprise — la doctrine du dépôt. Il DIT la cause
+  fort, et la commande part quand même : elle échoue une seconde plus tard, avec l'explication
+  juste au-dessus.
+  ✅ **Vérifié par les quatre chemins, et le seul qui prouve quelque chose est le dernier** :
+  commande sans rapport ⇒ muet · commande vers la carte, tunnel vivant ⇒ muet · outil non-Bash ⇒
+  muet · **`tailscaled` tué, puis la proie donnée au hook ⇒ `Self.Online est faux — remontée…` /
+  `✅ remonté` en 13,4 s, et l'`ssh` suivant répond.** *Les trois silences ne prouvaient rien —
+  un hook non chargé les rend à l'identique.*
 - 🔴🔴 **AJOUT DU 30/08 — ce hook-là ne s'arme QUE si la session ouvre CE dépôt.** Il est déclaré
   dans `.claude/settings.json`, donc lu quand le répertoire de projet est
   `…/PXL-CC-over-AnthrVM`. Quand la session ouvre le **PARENT** (`/home/user`, qui porte les
@@ -103,10 +129,19 @@ Détaillé dans `DOSSIER_VM.md` §4 et §7 — les pièges qui coûtent le plus 
   qui marche est le silence. 🎯 **Pour ce `SessionStart`-ci la conclusion reste DÉDUITE**, pas
   mesurée (le même mécanisme, un fichier voisin) — corrobore seulement le fait que le tunnel a dû
   être remonté à la main le 30/08. ⇒ Le remède est dans l'autre dépôt :
-  `PXL-Switcher/.claude/settings-parent.json`, qui déclare les **quatre** hooks avec les chemins
+  `PXL-Switcher/.claude/settings-parent.json`, qui déclare les **cinq** hooks avec les chemins
   vus depuis le parent, à copier dans `<parent>/.claude/settings.json`. ⚠️ Ce fichier-là n'est
   versionné nulle part — le workdir disparaît —, donc il se **repose** à chaque VM neuve, comme le
   tunnel.
+  🔴🔴 **ET IL ÉTAIT ABSENT LE 09/09 — la VM tournait depuis des heures avec les CINQ hooks
+  inertes**, `/home/user/.claude/` n'existant tout simplement pas. *La consigne était écrite ici
+  depuis le 30/08 ; personne ne l'avait posée.* C'est le motif 12 (« un fait consigné que personne
+  ne lit ») appliqué au fichier qui répare le motif 13. ⇒ **Premier geste d'une VM neuve, avant
+  tout le reste** :
+  `mkdir -p /home/user/.claude && cp PXL-Switcher/.claude/settings-parent.json /home/user/.claude/settings.json`
+  ⚠️ Et le vérifier ne coûte rien : `ls /home/user/.claude/settings.json`. **Un `ls` qui échoue est
+  le seul témoin qui distingue « les hooks tournent » de « les hooks n'existent pas », puisque les
+  deux se taisent.**
 - 🔴 **L'entrant ne passe que si le RELAIS HOME est celui des pairs** (mesuré 03/08, §3 ter).
   La VM est aux USA, elle choisit `nyc` ; un pair européen envoie vers `nyc` et rien n'arrive,
   alors que le sortant marche — asymétrie qui ressemble à une ACL et n'en est pas.
