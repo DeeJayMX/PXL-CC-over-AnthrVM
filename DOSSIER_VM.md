@@ -434,6 +434,15 @@ ce qui a été fait sur `pxl-airlink` le 01/08.
    met à jour par cet installeur, ou pas du tout.** Et le `xray` rétrogradé est revenu
    `active` sans réécouter ses ports — non élucidé, sans objet si OMR est retiré.
 
+10. ✅ **Erratum 8, suite : le TCP par le tailnet est élucidé** (12/09 soir). `tailscale debug
+   netmap` rend le filtre de paquets reçu par le nœud : « utilisateurs → moi:8080,443 » et
+   « moi → moi », rien d'autre. Un nœud tagué **sans règle ACL de sortie** ne peut initier aucun
+   TCP vers un pair, et le refus est silencieux (filtre appliqué chez le pair). Tailscale SSH
+   passe par sa propre section, `tailscale ping` ne traverse pas le filtre. **Leçon : avant
+   de chercher un mécanisme chez la cible, lire le filtre que le tailnet donne au nœud —
+   `tailscale debug netmap`, clé `PacketFilter`.** Deux jours d'hypothèses sur le routage
+   d'OMR pour une règle ACL absente.
+
 ---
 
 ## 9. Sources
