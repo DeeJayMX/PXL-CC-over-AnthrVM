@@ -120,6 +120,52 @@ CA bundle en `/root/.ccr/ca-bundle.crt`, `NODE_EXTRA_CA_CERTS` déjà pointé de
 > Ce n'est donc pas un simple tunnel : c'est un **point d'application de politique**, qui
 > connaît le périmètre de la session. Retenir la formulation — elle explique le §4.
 
+### 3 bis. Mesures des 11-12/09/2026 — ce que le tunnel laisse passer, exactement
+
+Session « maître du VPS » (relais TurboHQ à installer sur un VPS OVH). Tout mesuré.
+
+| Test | Résultat |
+|---|---|
+| `CONNECT 51.77.202.113:22` (et 65222, 80, 8080…) | **`200 Connection Established`**, puis silence, puis **403 à la première écriture** |
+| `CONNECT github.com:80` — hôte autorisé, port ouvert | **identique** : 200, silence, 403 à l'écriture |
+| `CONNECT github.com:5201` — port fermé | identique |
+| `CONNECT 51.77.202.113:443` | **403 dès le CONNECT** (hôte hors allowlist) |
+| `CONNECT mpv.io:443` (témoin) | 403 dès le CONNECT |
+
+⭐ **Le `200` du CONNECT est optimiste et ne signifie rien.** La politique s'applique à la
+**première écriture**. Et la règle réelle est plus étroite que « hôte autorisé » : le tunnel
+ne passe que **du TLS sur 443 vers un hôte autorisé**. Un port autre que 443, même vers
+`github.com`, est refusé. **SSH ne traversera jamais ce proxy**, quoi qu'on ajoute à
+l'allowlist. Le témoin `github.com:80` est ce qui l'a prouvé : sans lui, le VPS aurait
+été accusé à tort (errata 6).
+
+**Le seul chemin vers une machine tierce : le tailnet.** `tailscaled --tun=userspace-networking
+--socks5-server=127.0.0.1:1055`, `TS_AUTHKEY` présente dans l'environnement, DERP en HTTPS
+vers `*.tailscale.com` (autorisé). Une fois le VPS sur le tailnet avec `tailscale up --ssh`,
+**Tailscale SSH** répond (`SSH-2.0-Tailscale` sur le port 22 de l'IP 100.x, par le SOCKS5) :
+le démon termine la connexion en espace utilisateur, sans dépendre du pare-feu ni du routage
+de la cible. Client : `paramiko` depuis PyPI (`noProxy`) — il n'y a **ni `ssh` ni `sshpass`**
+dans la VM. Pont réutilisable : `/home/user/.pxl/vps.py` (exec + SFTP).
+
+Mesuré aussi, non élucidé : **le TCP brut par le tailnet vers ce VPS échoue sur tous les
+ports** (`socks5: context deadline exceeded`), alors que `tailscale ping` répond en 130 ms,
+que `tailscale0` y est montée en mode noyau, que `ts-input -i tailscale0 -j ACCEPT` existe et
+que la table 52 porte les routes. Seul le chemin espace-utilisateur marche. Reste ouvert.
+
+**Nuance au §4 et au §7 :** `add_repo` en lecture sur un dépôt public tiers
+(`Ysurac/openmptcprouter-vps`, `BELABOX/srtla`) rend `read_available` : **le proxy git sert
+les clones anonymes de dépôts publics**, sans rien attacher (`/home/user/<owner>/<repo>`).
+Ce qui reste hors d'atteinte, c'est l'*attachement* (push, API). « Attacher est impossible »
+(§7) est vrai ; « lire un dépôt tiers est impossible » ne l'est pas. Les pages GitHub
+(`/wiki`, `raw.githubusercontent.com`) restent réécrites/403 : c'est le clone qui passe.
+
+Autres mesures : `WebSearch` fonctionne ; `WebFetch` vers `arxiv.org` et `usenix.org` →
+`EGRESS_BLOCKED`. `tailscale up` **réaffiche `TS_AUTHKEY` en clair** dans son message
+d'aide quand on relance avec des flags différents — la clé finit dans le transcript.
+Redémarrage du conteneur (nuit du 11 au 12/09) : workdir survivant (canari), mais **tous les
+démons morts**, `run_in_background` compris — la différence avec `(cmd &)` est que la tâche
+suivie **notifie** sa mort ; aucune des deux ne lui survit.
+
 ---
 
 ## 4. ⭐ GitHub : deux couches d'application, et ce qu'elles refusent
@@ -357,6 +403,36 @@ ce qui a été fait sur `pxl-airlink` le 01/08.
    sonde affichait les deux verdicts à la fois. **Leçon : sous `pipefail`, capturer avant de
    filtrer quand la commande de gauche a le droit d'échouer.** (Les deux autres : `$HOME` vaut
    `/root` et non le workdir ; f-string Python avec guillemets doubles imbriqués.)
+
+6. ❌ **« Le VPS est bloqué par l'allowlist d'egress ; ajoutez-le et SSH passera. »** (11/09)
+   Faux à moitié, et la moitié fausse aurait fait perdre une journée : le tunnel ne passe
+   que du TLS/443, **SSH ne passe jamais**, allowlist ou pas. L'erreur venait de lire un
+   `CONNECT 200` puis un silence comme « le proxy accepte, la cible ne répond pas ». Le
+   témoin `github.com:80` — hôte autorisé, port ouvert, même symptôme — a renversé le
+   diagnostic. **Leçon : avant d'accuser la cible, rejouer le test sur un témoin dont on
+   connaît la réponse.** (§3 bis)
+
+7. ❌ **« Pas de `debian13-x86_64.sh` dans le dépôt d'OMR ⇒ Trixie non supporté ⇒ Debian 12. »**
+   (11/09, recommandation donnée à Eliott) Faux : tous les `debianNN-x86_64.sh` sont des
+   **liens symboliques vers un seul script**, dont la porte d'entrée accepte `VERSION_ID`
+   13 (`debian9-x86_64.sh:153`). **Leçon : la liste des fichiers n'est pas la logique ;
+   lire la condition, pas l'arborescence.**
+
+8. ❌ **« Le routage d'OMR (règle `from all lookup 52`) mange les SYN-ACK du tailnet. »**
+   (11/09, écrit avant d'entrer sur la machine) Non observé : une fois dedans, la table 52
+   contient les routes tailnet correctes, le pare-feu accepte `tailscale0`, l'interface est
+   montée. Le mécanisme annoncé n'explique rien, et la cause reste inconnue. Deux sous-erreurs
+   en route : « `tailscale0` absente » (liste tronquée par `head -20`) et « pas de MPTCP »
+   (`sysctl -n` muet là où `/proc/sys/net/mptcp/enabled` dit 1). **Leçon : une panne non
+   expliquée reste non expliquée ; publier un mécanisme qu'on n'a pas observé, c'est le
+   même piège que l'erratum 1, avec plus de vocabulaire.**
+
+9. ❌ **Mise à jour d'OMR paquet par paquet** (12/09) : `apt upgrade` a monté `xray` et
+   `shadowsocks-go` mais pas `omr-vps-admin` (dépendances), et les deux nouveaux binaires ont
+   refusé les configurations que l'ancien `omr-vps-admin` génère. Retour arrière depuis le
+   cache apt, `apt-mark hold`. **Leçon : un système livré par un installeur monolithique se
+   met à jour par cet installeur, ou pas du tout.** Et le `xray` rétrogradé est revenu
+   `active` sans réécouter ses ports — non élucidé, sans objet si OMR est retiré.
 
 ---
 
