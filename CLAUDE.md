@@ -83,6 +83,12 @@ Détaillé dans `DOSSIER_VM.md` §4 et §7 — les pièges qui coûtent le plus 
   coffre** — la doc interdit d'y mettre des credentials, ses valeurs sont lisibles par quiconque
   utilise l'environnement. Donc scoper la clé plutôt que la croire cachée : **réutilisable +
   éphémère + taguée**. C'est l'errata 8. ⚠️ `serve`, jamais `funnel`.
+  ⚠️ **16/09** : le déroulé effectif d'une séance de déploiement (tunnel, SSH, `deployer-carte.sh`)
+  et les réglages de session qui l'ont conditionné sont consignés en fin de § 3 ter. À lire
+  avant de relancer le script.
+  🔴 Et vérifier la BASE avant de déployer : `main` des deux dépôts a des semaines de retard sur
+  la branche du tunnel, celle que la carte fait tourner — `deployer-carte.sh --verifier` doit ne
+  montrer que ce qu'on vient de toucher.
 - ⚠️ **Une variable d'environnement ne prend effet qu'à la NAISSANCE d'une VM** (mesuré 03/08,
   §3 ter) : rafraîchir en re-provisionne une, ce n'est pas une synchro. En revanche le conteneur
   **persiste entre les invocations** — `uptime` mesuré deux fois le prouve. Et 🔴 **l'ACL d'un
