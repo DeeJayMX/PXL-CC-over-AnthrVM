@@ -122,6 +122,47 @@ CA bundle en `/root/.ccr/ca-bundle.crt`, `NODE_EXTRA_CA_CERTS` déjà pointé de
 
 ---
 
+## 3 bis. ⭐ Rejoindre le tailnet PXL depuis la VM — mesuré le 25/09
+
+*Première sortie de la VM vers **notre** réseau. Mesuré le 25/09/2026, kernel 6.18.44, VM neuve
+(canari absent). Cas d'usage : piloter le Pi `pxl-matrixled` depuis la session. Recette
+rejouable : `pxl-ledmatrix/scripts/claude_tailnet.sh`.*
+
+| Fait | Mesure |
+|---|---|
+| Serveurs Tailscale (`login.tailscale.com`, `pkgs.tailscale.com`) | ✅ joignables par le proxy HTTPS (302 / 200) |
+| Installation | binaires statiques `tailscale_<ver>_amd64.tgz` depuis `pkgs.tailscale.com/stable/` → `/usr/local/bin` (1.102.4 ce jour). Pas d'apt nécessaire |
+| `/dev/net/tun` | présent — mais **userspace-networking** retenu : pas de route, pas de root réseau à négocier |
+| Auth | `TS_AUTHKEY` en **variable de l'environnement cloud** (jamais dans le chat), clé éphémère taguée, `--state=mem:` |
+| Transport | **DERP uniquement** (`direct connection not established`) — pas d'UDP en sortie. DERP Paris, ~115 ms de ping |
+| Tailscale SSH (`tailscale ssh user@nœud`) | ✅ fonctionne, pas de clé à gérer ; les users sont ceux permis par la politique `ssh` des ACL |
+| TCP vers un port applicatif | ✅ par le SOCKS5 de `tailscaled` (`--socks5-server=localhost:1055`) ou `tailscale nc` |
+
+**Ce que ça change.** Le §7 dit « joindre un hôte hors allowlist : 403 » — **toujours vrai pour
+Internet**. Mais un nœud du tailnet est joignable, parce que tout le trafic Tailscale ressort en
+HTTPS vers les relais DERP, qui sont, eux, autorisés. Le mur n'est pas contourné, il est traversé
+par un hôte légitime.
+
+### Les pièges, déjà payés
+
+1. 🔴 **`NO_PROXY` de la VM contient `100.64.0.0/10`** — la plage CGNAT de Tailscale. Or
+   **curl applique `NO_PROXY` même à un proxy passé en option** (`--socks5-hostname`) : pour une IP
+   `100.x`, il ignore le SOCKS, part en direct, et **timeout** — ce qui ressemble trait pour trait
+   à un refus ACL. Remède : `curl --noproxy '' --socks5-hostname localhost:1055 …`. Un nom
+   MagicDNS en `*.ts.net` n'est pas concerné (hors `NO_PROXY`), d'où un 443 qui passe quand le
+   8080 « ne passe pas ». *Voir errata 6.*
+2. **`tailscaled` = tâche suivie** (`run_in_background` sur `tailscaled` en avant-plan), jamais
+   `nohup` — §2 règle 2. Et `--state=mem:` + clé éphémère : le nœud disparaît du tailnet avec la VM.
+3. **`tailscale ssh` n'accepte pas les options `-o` d'OpenSSH devant la cible** — il affiche son
+   aide, ce qui se lit facilement comme un échec de connexion. L'appeler nu : `tailscale ssh user@nœud 'cmd'`.
+   *Voir errata 7.*
+4. **`tailscale nc` sans données à envoyer rend la main aussitôt** (EOF sur stdin) : « rien reçu »
+   ne prouve pas que le port est fermé. Garder stdin ouvert : `(printf 'GET / HTTP/1.0\r\n\r\n'; sleep 5) | tailscale nc …`.
+5. **Diagnostic ACL sans deviner** : sur le nœud cible, `tailscale debug netmap` → `PacketFilter`
+   donne les règles **reçues** (sources × ports). C'est ce qui a disculpé l'ACL le 25/09.
+
+---
+
 ## 4. ⭐ GitHub : deux couches d'application, et ce qu'elles refusent
 
 Il n'y a **pas de `gh` CLI**. Deux chemins seulement, et **ils n'ont pas les mêmes droits** :
@@ -312,7 +353,7 @@ ce qui a été fait sur `pxl-airlink` le 01/08.
 | **Attacher un dépôt à une session en cours** | §4 — le périmètre est figé au démarrage de la VM ; il faut une session neuve |
 | Exécuter du code ARM | pas de `qemu-user` (§5) |
 | Mesurer une perf comparable entre sessions | le CPU change (§1) |
-| Joindre un hôte hors allowlist | 403 CONNECT (§3) |
+| Joindre un hôte hors allowlist | 403 CONNECT (§3) — *vrai pour Internet ; un nœud de notre tailnet, lui, est joignable par DERP (§3 bis, 25/09)* |
 | Localiser la VM | metadata bloquée (§1, §3) |
 | **Autoriser un serveur MCP en OAuth** | le flux est interactif ; en session non-interactive c'est impossible. Vu le 01/08 sur le connecteur Canva. ⇒ passe par les réglages claude.ai de l'utilisateur |
 | Plafonner la VRAM par un flag Chromium | §6 piège 4 |
@@ -357,6 +398,20 @@ ce qui a été fait sur `pxl-airlink` le 01/08.
    sonde affichait les deux verdicts à la fois. **Leçon : sous `pipefail`, capturer avant de
    filtrer quand la commande de gauche a le droit d'échouer.** (Les deux autres : `$HOME` vaut
    `/root` et non le workdir ; f-string Python avec guillemets doubles imbriqués.)
+
+6. ❌ **« Le port 8080 du Pi est bloqué par l'ACL Tailscale. »** (25/09) Annoncé sur un timeout
+   curl ; l'ACL était correcte (tags `tag:pxl-vm` → `tag:pxl-dev`, port 8080 présent dans le
+   `PacketFilter` reçu par le Pi). Cause réelle : `NO_PROXY` de la VM couvre `100.64.0.0/10`, et
+   curl l'applique même au SOCKS passé en option — la requête n'a jamais traversé Tailscale.
+   Indice négligé : le 443 du même Pi passait, **par son nom `*.ts.net`**. **Leçon : un timeout
+   n'est pas un refus ; avant d'accuser la politique distante, vérifier que le paquet a bien pris
+   le chemin prévu** — ici, la variable d'environnement locale mentait plus tôt que l'ACL.
+
+7. ❌ **« Le Pi n'a pas Tailscale SSH, seulement OpenSSH. »** (25/09) Conclu parce que
+   `tailscale ssh -o … user@nœud` « échouait » — il affichait en fait son aide (options `-o`
+   refusées), puis un `ssh` OpenSSH via `tailscale nc` tombait bien sur `Permission denied`.
+   Appelé nu, `tailscale ssh root@pxl-matrixled` passait du premier coup. **Leçon : lire la sortie
+   d'un outil avant de la classer en échec — une page d'aide n'est pas un refus.**
 
 ---
 
