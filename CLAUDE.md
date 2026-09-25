@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Dépôt d'exploration, pas de base de code.** Ni build system, ni application, ni tests. Le
 sujet est **la VM Claude Code elle-même** : ce qu'elle est, ce qu'elle sait faire, ce qu'elle
-refuse. Le livrable est le relevé — [`DOSSIER_VM.md`](DOSSIER_VM.md) — et les trois sondes de
+refuse. Le livrable est le relevé — [`DOSSIER_VM.md`](DOSSIER_VM.md) — et les quatre sondes de
 `probes/` qui le rejouent.
 
 Particularité : **ce dépôt décrit l'environnement dans lequel tu tournes peut-être.** Si la
@@ -34,7 +34,7 @@ rien. Corollaire : ne jamais citer un chiffre d'ici comme la vérité de la sess
 relancer la sonde.
 
 **La section « Errata » (§8) ne se nettoie pas.** Elle consigne des inférences fausses avec leur
-mécanisme ; trois des cinq entrées corrigent une conclusion tirée trop vite d'une observation
+mécanisme ; quatre des six entrées corrigent une conclusion tirée trop vite d'une observation
 juste. Ce sont exactement les raisonnements qui seront refaits. Une erreur corrigée **s'y
 ajoute**.
 
@@ -47,15 +47,156 @@ la VM, la durée de recyclage côté doc officielle, et la seconde des deux couc
 Détaillé dans `DOSSIER_VM.md` §4 et §7 — les pièges qui coûtent le plus cher :
 
 - 🔴 **Créer un dépôt et supprimer une branche sont hors d'atteinte** depuis une session cloud
-  (403). **Attacher un dépôt à une session en cours aussi** : le périmètre est figé au démarrage
-  de la VM. Ne pas y passer du temps — ça demande une action humaine, ou un poste local.
+  (403). Ne pas y passer du temps — ça demande une action humaine, ou un poste local.
   Contournement pour la suppression de branche : pousser un commit qui la vide.
+- ⭐ **Attacher un dépôt en cours de session, en revanche, marche** (`add_repo`, mesuré 02/08,
+  §4 bis). Le dossier a longtemps dit le contraire, sur un rapport non vérifié — c'est
+  l'errata 7. ⚠️ **L'invite système continue d'afficher la liste du démarrage** après un
+  `add_repo` réussi : elle n'est pas la liste effective. Avant de déclarer un dépôt
+  inatteignable, appeler `list_repos`. Un clone à la fois (sinon HTTP 429), délai généreux.
 - 🔴 **Push = survie.** Tout livrable est committé *et poussé* dans le tour qui le produit.
   Travail long ⇒ `run_in_background` (tâche suivie, maintient la VM en vie), **jamais**
   `nohup`/détaché — le recyclage le tue en vol.
 - **Devant un 403/407/échec TLS inexpliqué** : `curl "$HTTPS_PROXY/__agentproxy/status"` avant
   de suspecter son propre code. Ne jamais désactiver la vérification TLS ni retirer
-  `HTTPS_PROXY` pour contourner.
+  `HTTPS_PROXY` pour contourner. ⚠️ Son `recentRelayFailures` a un angle mort — il est resté
+  vide sur des connexions pendues (§3 bis, errata 6). Champ vide ≠ pas d'échec.
+- 🔴 **Tunnels sortants — LE FILTRE A CHANGÉ DE NATURE, et ce fichier l'a annoncé faux pendant
+  un mois.** Il disait *« l'egress est restreint à TCP/80, TCP/443, UDP/53 »* (mesuré 02/08),
+  ce qui était vrai à cette date. **Mesuré le 19/08** : le filtrage est désormais **par HÔTE**,
+  par une passerelle TLS d'Anthropic qui lit le **SNI** et rend un 403 nommant l'hôte refusé
+  (`Host not in allowlist: …`). Témoins : `pypi.org` → 200, `example.com` → **403**.
+  ⇒ **Le repli DERP-sur-443 ne contourne donc plus rien** : `derp*.tailscale.com:443` est refusé
+  au même titre. Le remède n'est pas du code — il faut ajouter `*.tailscale.com` (au minimum
+  `controlplane.` + `derp*.` + `log.`) dans **Network egress settings** de l'environnement.
+  ⚠️ Et ces réglages **ne sont PAS figés au démarrage** : un ajout fait depuis l'interface WEB
+  s'applique en direct aux sessions vivantes (errata 12). Voir § 3 du dossier.
+  ⚠️ Cloudflare Tunnel **ne passe pas** (port 7844). Les deux rendent un **plan de contrôle qui
+  réussit** avant d'échouer.
+  🔴 *Ce fait était mesuré et poussé depuis le 19/08 ; il est resté un mois dans une branche que
+  j'avais refusé de fusionner sur un diff lu à l'envers — errata 16.*
+- **Remonter le tunnel dans une VM neuve** : `bash tunnel_up.sh [port]` (§3 ter). 🔴 La clé de
+  nœud n'est pas persistable — le workdir disparaît, et la versionner publierait un secret.
+  C'est `TS_AUTHKEY` qui survit, dans les variables d'environnement de l'environnement Claude
+  Code : **claude.ai/code → icône nuage au-dessus de la saisie → roue dentée** (il n'y a ni page
+  de réglages ni URL directe, d'où la difficulté à la trouver). 🔴 **Cette boîte n'est pas un
+  coffre** — la doc interdit d'y mettre des credentials, ses valeurs sont lisibles par quiconque
+  utilise l'environnement. Donc scoper la clé plutôt que la croire cachée : **réutilisable +
+  éphémère + taguée**. C'est l'errata 8. ⚠️ `serve`, jamais `funnel`.
+  ⚠️ **16/09** : le déroulé effectif d'une séance de déploiement (tunnel, SSH, `deployer-carte.sh`)
+  et les réglages de session qui l'ont conditionné sont consignés en fin de § 3 ter. À lire
+  avant de relancer le script.
+  🔴 Et vérifier la BASE avant de déployer : `main` des deux dépôts a des semaines de retard sur
+  la branche du tunnel, celle que la carte fait tourner — `deployer-carte.sh --verifier` doit ne
+  montrer que ce qu'on vient de toucher.
+- ⚠️ **Une variable d'environnement ne prend effet qu'à la NAISSANCE d'une VM** (mesuré 03/08,
+  §3 ter) : rafraîchir en re-provisionne une, ce n'est pas une synchro. En revanche le conteneur
+  **persiste entre les invocations** — `uptime` mesuré deux fois le prouve. Et 🔴 **l'ACL d'un
+  nœud ne se teste pas depuis ce nœud** : proxy → 502, `--accept-dns=false` → pas de MagicDNS.
+  Un échec là n'est pas un refus d'ACL. Policy de référence : `tailscale-policy.hujson`.
+- ⭐ **Le tunnel se remonte TOUT SEUL** : hook `SessionStart` → `session_start.sh` (console puis
+  tunnel, idempotent, ~10 s à chaud, sort toujours en 0). Deux variables à poser une fois dans
+  l'environnement : `TS_AUTHKEY` et `PXL_CONSOLE_MOTDEPASSE` — sans la seconde, le mot de passe
+  de la console est tiré au sort à chaque réveil.
+- ⭐⭐ **AJOUT DU 09/09 — ET IL Y A UN SECOND HOOK, PARCE QUE `SessionStart` NE COUVRE PAS LE CAS
+  QUI MORD** (demande d'Eliott : *« tu devrais te faire un hook pour verif tailscale quand la VM
+  repart »*). ✅ **Mesuré ce jour-là : le tunnel est tombé TROIS FOIS en une seule séance, en
+  cours de route, sans que rien ne redémarre** — un `SessionStart` n'en aurait attrapé aucune.
+  Les deux hooks visent donc deux événements différents, et il faut les deux :
+  **SessionStart** → la VM repart, il n'y a jamais eu de tunnel (`session_start.sh`) ·
+  **PreToolUse** → le tunnel est mort SOUS une session vivante
+  (`.claude/hooks/tunnel-vivant.mjs`).
+  ⭐ Il ne sonde que les commandes qui **visent la carte** (`pxl-tx`, `100.94.64.107`,
+  `tailscale nc`, `deployer-carte.sh`) : sonder tous les `Bash` paierait un `status` sur chaque
+  `ls`, et surtout remonterait un tunnel dont on n'a pas besoin.
+  🔴 **Le prédicat est `Self.Online`, JAMAIS le code de retour** — `tailscale status` sort en 0
+  sur un nœud déconnecté (mesuré le 05/09, écrit dans `tunnel_up.sh` l. 124-128). C'est le même
+  prédicat que le script qu'il appelle : deux prédicats pour la même question seraient deux
+  modèles.
+  ⭐ **Ce qu'il supprime n'est pas la panne, c'est la MÉPRISE** : le tunnel mort se lit
+  `failed to connect to local tailscaled` puis `Connection closed by UNKNOWN port 65535`,
+  c'est-à-dire un message qui décrit la VM et qu'on impute à la CARTE.
+  ⚠️ **Il ne bloque JAMAIS**, remontée échouée comprise — la doctrine du dépôt. Il DIT la cause
+  fort, et la commande part quand même : elle échoue une seconde plus tard, avec l'explication
+  juste au-dessus.
+  ✅ **Vérifié par les quatre chemins, et le seul qui prouve quelque chose est le dernier** :
+  commande sans rapport ⇒ muet · commande vers la carte, tunnel vivant ⇒ muet · outil non-Bash ⇒
+  muet · **`tailscaled` tué, puis la proie donnée au hook ⇒ `Self.Online est faux — remontée…` /
+  `✅ remonté` en 13,4 s, et l'`ssh` suivant répond.** *Les trois silences ne prouvaient rien —
+  un hook non chargé les rend à l'identique.*
+- 🔴🔴 **AJOUT DU 30/08 — ce hook-là ne s'arme QUE si la session ouvre CE dépôt.** Il est déclaré
+  dans `.claude/settings.json`, donc lu quand le répertoire de projet est
+  `…/PXL-CC-over-AnthrVM`. Quand la session ouvre le **PARENT** (`/home/user`, qui porte les
+  dépôts côte à côte), ce fichier n'est jamais lu et **aucun hook ne tourne** — mesuré ce jour-là
+  sur les hooks de `PXL-Switcher`, par le seul discriminant qui vaille : **donner au hook la
+  commande qu'il doit refuser** (`… | node .claude/hooks/pas-de-pkill-f.mjs` ⇒ `rc=2`) alors que
+  cette même commande venait de s'exécuter sans obstacle. ⚠️ *Un hook non chargé et un hook qui
+  laisse passer sont indiscernables*, et le second est le comportement voulu : le témoin d'un hook
+  qui marche est le silence. 🎯 **Pour ce `SessionStart`-ci la conclusion reste DÉDUITE**, pas
+  mesurée (le même mécanisme, un fichier voisin) — corrobore seulement le fait que le tunnel a dû
+  être remonté à la main le 30/08. ⇒ Le remède est dans l'autre dépôt :
+  `PXL-Switcher/.claude/settings-parent.json`, qui déclare les **cinq** hooks avec les chemins
+  vus depuis le parent, à copier dans `<parent>/.claude/settings.json`. ⚠️ Ce fichier-là n'est
+  versionné nulle part — le workdir disparaît —, donc il se **repose** à chaque VM neuve, comme le
+  tunnel.
+  🔴🔴 **ET IL ÉTAIT ABSENT LE 09/09 — la VM tournait depuis des heures avec les CINQ hooks
+  inertes**, `/home/user/.claude/` n'existant tout simplement pas. *La consigne était écrite ici
+  depuis le 30/08 ; personne ne l'avait posée.* C'est le motif 12 (« un fait consigné que personne
+  ne lit ») appliqué au fichier qui répare le motif 13. ⇒ **Premier geste d'une VM neuve, avant
+  tout le reste** :
+  `mkdir -p /home/user/.claude && cp PXL-Switcher/.claude/settings-parent.json /home/user/.claude/settings.json`
+  ⚠️ Et le vérifier ne coûte rien : `ls /home/user/.claude/settings.json`. **Un `ls` qui échoue est
+  le seul témoin qui distingue « les hooks tournent » de « les hooks n'existent pas », puisque les
+  deux se taisent.**
+- 🔴 **L'entrant ne passe que si le RELAIS HOME est celui des pairs** (mesuré 03/08, §3 ter).
+  La VM est aux USA, elle choisit `nyc` ; un pair européen envoie vers `nyc` et rien n'arrive,
+  alors que le sortant marche — asymétrie qui ressemble à une ACL et n'en est pas.
+  `tunnel_up.sh` force désormais la région la plus peuplée chez les pairs en ligne
+  (`TS_DERP_REGION` pour surcharger). ⚠️ `force-prefer-derp` est « until restart ».
+- 🔴 **Le port du proxy de session change** quand l'infrastructure redémarre (signe : les MCP se
+  déconnectent/reconnectent). `tailscaled` l'a mémorisé au démarrage ⇒ il perd sa sortie et
+  meurt. Relancer console **puis** `tunnel_up.sh`. ⚠️ Et `tailscale ping` d'un pair vers la VM
+  est soumis à l'ACL : avec une règle `:443` seule, il échoue même quand tout marche — ne pas
+  diagnostiquer avec.
+- ⚠️ **Un nœud porte DEUX noms** : `HostName` (affiché) et `DNSName` (l'URL). Un suffixe `-1`
+  marque une collision ; supprimer l'homonyme rend le `HostName` tout seul mais **pas** le
+  `DNSName`, figé à l'enregistrement. Pour le reprendre sur un nœud éphémère : `tailscale
+  logout` puis `tunnel_up.sh` — **pas** un rafraîchissement de session, qui recrée la VM et tue
+  la console au passage. ⚠️ Et le nœud éphémère meurt avec la VM : relancer console **puis**
+  tunnel à chaque réveil, dans cet ordre.
+- ⭐⭐ **LA CARTE EST JOIGNABLE DEPUIS LA VM depuis le 29/08** (§ 3 sexies) — elle est taguée
+  `tag:pxl-dev` et une règle ouvre **22 · 8710 · 443 · 8443**. `tailscale nc` est le **seul**
+  outil qui route le 100.x (userspace-networking : ni `curl` ni le proxy ne le voient), et
+  `~/.ssh/config` porte un hôte `pxl-tx` dont le `ProxyCommand` s'en sert.
+  🔴 **Trois verdicts, trois causes, et « refusé » est la BONNE nouvelle** : un RST prouve que le
+  paquet a atteint la carte (l'ACL passe, rien n'écoute) ; seul un **pendu** est un refus d'ACL,
+  Tailscale jetant en silence. Toujours sonder **un port hors règle en contrôle**, sinon les deux
+  se confondent en « ça ne marche pas ».
+  ⚠️ **Et `timeout … | head` rend le code de `head`** : la première sonde annonçait `rc=0` sur
+  cinq ports dont deux étaient dropés — une victoire fausse.
+  ⭐⭐ **Le SSH est OUVERT depuis le 29/08 au soir** — `tailscale ssh radxa@100.94.64.107`. Il a
+  fallu **les deux moitiés** : `tailscale set --ssh` sur la carte **et** un bloc `ssh` en
+  **`accept`** (jamais `check` — il demande une ré-auth humaine dans un navigateur, et personne
+  n'est devant cette VM), `src: tag:pxl-vm` → `dst: tag:pxl-dev`. ⭐ **Les deux échecs ne se
+  ressemblent pas, et c'est le diagnostic** : « host key verification failed » ⇒ Tailscale SSH
+  n'est pas actif **sur la carte** ; « tailnet policy does not permit… » ⇒ il l'est, et c'est **la
+  policy** qui manque. 🎯 Ouvrir un port n'allume rien derrière : 443/8443 sont ouverts et **vides**.
+- ⭐ **`curl` ATTEINT le 100.x depuis le 25/09** (§ 3 septies — corrige la ligne ci-dessus) :
+  `tailscaled … --socks5-server=localhost:1055`, puis `curl --noproxy '' --socks5-hostname
+  localhost:1055 http://<100.x>:<port>/`. 🔴 **Le `--noproxy ''` est indispensable** : `NO_PROXY`
+  de la VM contient `100.64.0.0/10`, curl l'applique même au SOCKS et **timeoute** — ce qui
+  ressemble trait pour trait à un refus d'ACL (errata 17). Contrôle côté cible :
+  `tailscale debug netmap` → `PacketFilter`. Et `tailscale ssh` s'appelle **nu** : avec des `-o`
+  il affiche son aide (errata 18).
+- ⭐⭐ **PILOTER LE DESK sans faire sortir le mot de passe de la carte** (§ 3 sexies) : tout
+  s'exécute *sur* la carte (`ssh … 'bash -s' <<'FIN'`) et `curl` parle à `127.0.0.1:8710`.
+  🔴 Quatre pièges, tous silencieux : **`set -a`** avant de sourcer `/etc/default/pxl-console`
+  (un fichier `default` n'exporte pas) · mot de passe par **STDIN** (`curl --data @-`, jamais
+  `argv`, que `ps` montre) · l'enveloppe est **`{"command":…,"args":{}}`** · et 🔴🔴 l'état est
+  sous **`s.state.compositions`** — lire `s.compositions` avec un `|| {}` rend « desk vide » au
+  lieu d'échouer, AVANT et APRÈS concordant alors sur l'empreinte de `{}`.
+  ⚠️ **Sur un desk en service : empreinte des deux compositions avant, commande, empreinte après.**
+  Un `ok:true` sans changement est indiscernable d'une commande qui a marché.
 - **Chromium** : contexte sécurisé obligatoire (`http://127.0.0.1:<port>`, pas `about:blank`),
   et Chromium hérite de `HTTPS_PROXY` ⇒ `proxy: {server: 'direct://'}`. Binaire stable :
   `/opt/pw-browsers/chromium` (lien symbolique — ne pas versionner la révision). Ne pas lancer

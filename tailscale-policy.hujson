@@ -1,0 +1,232 @@
+// Tailnet policy — PXL. COPIE DE RÉFÉRENCE.
+//
+// 🔴 Rien n'applique ce fichier. La policy vit dans la console d'admin Tailscale
+// (Access controls) ; ceci en est une copie pour ne pas la re-déduire dans six
+// mois. Si les deux divergent, c'est la console qui fait foi.
+//
+// Aucun secret ici : une policy décrit une structure d'accès, pas des clés.
+//
+// ⚠️ ORDRE OBLIGATOIRE : enregistrer cette policy AVANT de générer l'auth key.
+// Un tag non déclaré dans `tagOwners` n'est pas proposé au moment de créer la
+// clé — et on cherche longtemps pourquoi.
+//
+// Voir DOSSIER_VM.md §3 ter pour le raisonnement complet et les mesures.
+{
+	// ─── Groupes ──────────────────────────────────────────────────────────────
+	// Rien à déclarer sur un tailnet personnel : `autogroup:member` suffit.
+	// "groups": {
+	//  	"group:example": ["alice@example.com", "bob@example.com"],
+	// },
+
+	// ─── Tags ─────────────────────────────────────────────────────────────────
+	// Un tag est une IDENTITÉ DE MACHINE, distincte d'un utilisateur.
+	//
+	// Sans lui, la VM Claude Code rejoint le tailnet EN TANT QU'ELIOTT et hérite
+	// de ses droits : une clé qui fuite donne une machine qui agit comme lui.
+	// Avec lui, la machine perd toute authentification liée à un utilisateur et
+	// ne peut plus faire que ce que les règles ci-dessous autorisent.
+	//
+	// ⚠️ Un tag DOIT être déclaré ici avant de pouvoir être posé sur une auth
+	// key. Mesuré le 03/08 : avec la déclaration en place, le nœud remonte bien
+	// avec `Self.Tags = ["tag:pxl-vm"]`.
+	"tagOwners": {
+		"tag:pxl-vm": ["autogroup:admin"],
+
+		// ⭐ AJOUTÉ PAR ELIOTT LE 29/08 — la CARTE (`pxl-tx`), pour que la VM
+		// puisse développer en direct dessus. Le nom est `pxl-dev` (pour
+		// *device*), pas `pxl-carte` : c'est lui qui est en service.
+		//
+		// ⚠️ Poser ce tag a un effet de bord qu'on n'a pas choisi : une machine
+		// taguée SORT d'`autogroup:self`. La carte a donc quitté la première
+		// règle (« les appareils d'un utilisateur entre eux ») ET le bloc `ssh`
+		// plus bas, qui vise `autogroup:self`. Tout accès à la carte passe
+		// désormais par les règles explicites ci-dessous, y compris depuis le
+		// poste d'Eliott. *Un tag n'ajoute pas une identité, il en remplace une.*
+		"tag:pxl-dev": ["autogroup:admin"],
+	},
+
+	// ─── Accès ────────────────────────────────────────────────────────────────
+	"acls": [
+		// Les appareils d'un utilisateur entre eux. C'est ce que l'« allow all »
+		// du fichier d'exemple faisait en pratique sur un tailnet personnel.
+		//
+		// ⚠️ PIÈGE 1 : `autogroup:member` est INTERDIT en `dst` — seuls
+		// `autogroup:self` et `autogroup:internet` y sont valides. En `src`, il
+		// va très bien. C'est asymétrique et rien ne le laisse deviner.
+		//
+		// ⚠️ PIÈGE 2 : `autogroup:self` ne couvre QUE les appareils appartenant
+		// à un utilisateur. Une machine taguée n'en fait JAMAIS partie — d'où la
+		// règle suivante, et d'où le fait que la VM soit exclue de tout le reste
+		// sans qu'on ait à l'écrire.
+		{"action": "accept", "src": ["autogroup:member"], "dst": ["autogroup:self:*"]},
+
+		// Eliott → la console de la VM, en HTTPS. 443 parce que c'est le port
+		// sur lequel `tailscale serve` publie, avec le nom MagicDNS du nœud.
+		// Le port est explicite et pas `:*` : rien d'autre n'a besoin d'être
+		// joignable sur cette machine.
+		{"action": "accept", "src": ["autogroup:member"], "dst": ["tag:pxl-vm:443"]},
+
+		// ⭐⭐ LA VM → LA CARTE (29/08). C'est la règle qu'Eliott a écrite pour
+		// qu'on développe en direct sur le desk, et la PREMIÈRE qui donne à
+		// `tag:pxl-vm` un droit en `src` — le paragraphe ci-dessous, qui disait
+		// « aucune règle n'a `tag:pxl-vm` en src », n'est donc plus vrai.
+		//
+		// 🔴 CETTE LIGNE N'A PAS ÉTÉ LUE, ELLE A ÉTÉ MESURÉE — et les deux
+		// moitiés n'ont pas le même statut :
+		//   · les PORTS sont **démontrés** (sonde du 29/08, ci-dessous) ;
+		//   · les sélecteurs `src`/`dst` sont **déduits** — je n'ai pas accès à
+		//     la console d'admin. Si Eliott a écrit `autogroup:member` en `src`
+		//     plutôt que `tag:pxl-vm`, l'effet observé serait identique.
+		// ⚠️ Donc : en cas de divergence, la console fait foi, comme toujours —
+		// mais ici on le sait d'avance pour une moitié de la ligne.
+		{"action": "accept", "src": ["tag:pxl-vm"], "dst": ["tag:pxl-dev:22,443,8443,8710"]},
+
+		// ⭐⭐ LA SONDE QUI A ÉTABLI CES PORTS, et son CONTRÔLE (29/08, depuis la
+		// VM, `tailscale nc` — seul outil qui route le 100.x en userspace) :
+		//
+		//   | port | verdict            | temps  | ce que ça prouve            |
+		//   |------|--------------------|--------|-----------------------------|
+		//   | 22   | connecté           | 130 ms | bannière `SSH-2.0-OpenSSH_9.2p1 Debian-2+deb12u3` |
+		//   | 8710 | connecté           | —      | `HTTP/1.1 200`, `<title>PXL Switch — connexion</title>` |
+		//   | 443  | REFUSÉ (RST)       | —      | l'ACL passe · rien n'écoute |
+		//   | 8443 | REFUSÉ (RST)       | —      | l'ACL passe · rien n'écoute |
+		//   | 80   | pendu, tué à 8 s   | 8007ms | l'ACL DROP                  |
+		//   | 8711 | pendu, tué à 8 s   | 8004ms | l'ACL DROP (contrôle)       |
+		//
+		// ⭐⭐ **Les trois verdicts sont distincts, et c'est ça qui fait la
+		// mesure.** Un « refus » se lit spontanément comme un échec ; c'est
+		// l'inverse — un RST prouve que le paquet a ATTEINT la carte, donc que
+		// l'ACL l'a laissé passer. Seul le PENDU est un refus d'ACL (Tailscale
+		// jette en silence, il ne rejette pas). Sans les deux lignes de contrôle
+		// (80 et 8711, hors règle), « refusé » et « dropé » se seraient
+		// confondus dans un même « ça ne marche pas ».
+		// ⚠️ **Et la sonde s'est trompée d'abord** : `timeout … nc … | head` rend
+		// le code de `head`, pas celui de `timeout` — les cinq ports rendaient
+		// donc `rc=0`, c'est-à-dire « tout marche ». *Un banc qui ne peut pas
+		// voir l'échec qu'il cherche* (MISTAKE.md motif 2), en une barre
+		// verticale.
+		//
+		// ⭐ Ce que la sonde a tranché EN PLUS, et qui n'était que concordant
+		// jusque-là : `100.94.64.107` **EST** la carte. On l'avait déduit de
+		// « seul pair Linux en ligne » ; la preuve est que le port 8710 y sert
+		// la page de connexion de NOTRE console, en-tête CSP compris.
+		//
+		// 🎯 443 et 8443 sont ouverts et **vides** — le `tailscale serve` de la
+		// carte n'existe pas. Ouvrir un port n'allume rien derrière ; c'est un
+		// geste à faire SUR la carte le jour où on en veut du HTTPS nommé.
+
+		// ⚠️ Ce qui reste vrai du paragraphe d'origine : la VM ne joint AUCUNE
+		// autre machine du tailnet — la règle ci-dessus nomme `tag:pxl-dev` et
+		// rien d'autre. Sa sortie internet et son relais DERP ne passent pas par
+		// les ACL.
+		//
+		// 🔴 NON VÉRIFIÉ depuis la VM, et ça ne peut pas l'être : un `curl` vers
+		// son propre nom tailnet échoue pour deux raisons qui n'ont rien à voir
+		// avec l'ACL (proxy de session → 502 ; `--accept-dns=false` → pas de
+		// MagicDNS). Un échec là-bas ne prouve rien. Seul un poste du tailnet
+		// peut valider cette règle. Voir §3 ter, mesure 6.
+	],
+
+	// ─── SSH ──────────────────────────────────────────────────────────────────
+	// Inchangé par rapport au fichier d'exemple. `autogroup:self` excluant les
+	// machines taguées, la VM n'est pas joignable en SSH — comportement voulu,
+	// obtenu sans rien écrire de plus.
+	//
+	// 🔴🔴 ET DEPUIS LE 29/08 CE BLOC NE COUVRE PLUS LA CARTE NON PLUS. Elle est
+	// taguée `tag:pxl-dev`, donc hors d'`autogroup:self`, donc hors de la seule
+	// règle `ssh` du tailnet. **Mesuré** : le TRANSPORT jusqu'au port 22 marche
+	// (bannière OpenSSH lue à travers `tailscale nc`), et le serveur n'offre que
+	// `publickey,password` — c'est-à-dire que Tailscale SSH n'est pas en jeu,
+	// on tombe sur le `sshd` ordinaire de la carte. Empreinte relevée le 29/08 :
+	// `SHA256:X8ebKe7SGzGL7M8J5ew568YiEcr6I/MWo0u5eSA1o8o` (ED25519).
+	//
+	// ⚠️ Ce bloc n'a PAS été modifié — ce fichier est une copie de ce qui est en
+	// service, pas un brouillon de ce qu'on voudrait. Ouvrir le SSH de la carte
+	// à la VM demanderait d'AJOUTER une règle, et deux points décident :
+	//   *(1)* 🔴 `action` doit être **`accept`**, JAMAIS `check` : `check`
+	//         exige une ré-authentification humaine dans un navigateur, et une
+	//         VM sans opérateur devant elle attendrait indéfiniment ;
+	//   *(2)* il faut aussi `tailscale set --ssh` SUR LA CARTE — une règle
+	//         `ssh` ne fait rien tant que le nœud distant n'a pas activé
+	//         Tailscale SSH. *Autoriser n'est pas servir*, exactement comme les
+	//         ports 443/8443 ouverts et vides ci-dessus.
+	// 🎯 L'alternative — une paire de clés — est le mauvais outil ICI : la clé
+	// privée mourrait avec la VM (le workdir ne survit pas) et la versionner
+	// publierait un secret. Il faudrait la régénérer à chaque réveil. C'est
+	// exactement le raisonnement qui a fait choisir `TS_AUTHKEY` pour le tunnel.
+	//
+	// ✅ **OUVERT LE 29/08 AU SOIR** — Eliott a posé les DEUX moitiés (le bloc
+	// ci-dessous, et `tailscale set --ssh` sur la carte). Mesuré depuis la VM :
+	// `radxa` · `rock-5b` · `radxa,rock-5b rockchip,rk3588` · `6.1.43-15-rk2312`.
+	// ⭐ Les deux moitiés ayant été posées l'une APRÈS l'autre, on a vu que les
+	// deux échecs ne se ressemblent pas — et c'est un instrument de diagnostic :
+	//   · `No ED25519 host key is known… verification failed`
+	//       ⇒ Tailscale SSH n'est pas actif **sur la carte** (on est retombé sur
+	//         le client `ssh` du système) ;
+	//   · `tailscale: tailnet policy does not permit you to SSH to this node`
+	//       ⇒ il est actif, et c'est **cette policy** qui manque.
+	// *Un message d'erreur qui change de nature dit de quel côté chercher.*
+	"ssh": [
+		// ⭐⭐ LA VM → LA CARTE. `accept`, pas `check` : voir ci-dessus.
+		// ⚠️ Ce bloc S'AJOUTE à celui d'origine, il ne le remplace pas — celui-là
+		// sert les machines non taguées d'Eliott et n'a aucune raison de bouger.
+		{
+			"action": "accept",
+			"src":    ["tag:pxl-vm"],
+			"dst":    ["tag:pxl-dev"],
+			"users":  ["radxa", "root"],
+		},
+
+		{
+			"action": "check",
+			"src":    ["autogroup:member"],
+			"dst":    ["autogroup:self"],
+			"users":  ["autogroup:nonroot", "root"],
+		},
+	],
+
+	// ─── Funnel ───────────────────────────────────────────────────────────────
+	// ⚠️ LAISSÉ ACTIF : rien ne change par rapport au fichier d'exemple.
+	//
+	// Cet attribut autorise Funnel — l'exposition sur l'internet PUBLIC. Eliott
+	// a coupé l'exposition publique le 02/08 et `tunnel_up.sh` refuse `funnel`
+	// par convention, mais une convention dans un script se contourne par
+	// accident. Commenter ce bloc rendrait Funnel STRUCTURELLEMENT impossible
+	// sur tout le tailnet, quoi que lance n'importe quel script. `serve` n'est
+	// pas concerné : lui n'a pas besoin de cet attribut.
+	//
+	// ⚠️ Ça vaudrait pour TOUS les appareils, pas seulement la VM. Décision non
+	// prise à ce jour — la laisser à Eliott plutôt que la glisser dans un
+	// copier-coller.
+	"nodeAttrs": [
+		{
+			"target": ["autogroup:member"],
+			"attr":   ["funnel"],
+		},
+	],
+
+	// ─── Le garde-fou ─────────────────────────────────────────────────────────
+	// Si une assertion échoue, Tailscale REFUSE d'enregistrer le fichier. On ne
+	// peut donc pas publier une policy qui coupe l'accès à la console, ni une
+	// qui ouvrirait le SSH de la VM par mégarde.
+	//
+	// ⚠️ Sur un tailnet où l'on se connecte par GitHub, un utilisateur s'écrit
+	// `username@github` et NON par son adresse e-mail. La valeur exacte est
+	// affichée dans admin console → Users : ne pas la deviner, la casse compte.
+	"tests": [
+		{
+			"src":    "<login>@github",
+			"accept": ["tag:pxl-vm:443"],
+			"deny":   ["tag:pxl-vm:22"],
+		},
+
+		// ⭐ Le pendant du 29/08 : la VM atteint la carte sur les quatre ports
+		// nommés, et RIEN d'autre. Le `deny` est la moitié qui compte — sans
+		// lui, remplacer la règle par `tag:pxl-dev:*` passerait le test.
+		{
+			"src":    "tag:pxl-vm",
+			"accept": ["tag:pxl-dev:22", "tag:pxl-dev:8710", "tag:pxl-dev:443", "tag:pxl-dev:8443"],
+			"deny":   ["tag:pxl-dev:80", "tag:pxl-dev:8711"],
+		},
+	],
+}
