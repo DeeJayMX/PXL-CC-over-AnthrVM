@@ -1187,6 +1187,19 @@ Tailscale**. Le contrôle décisif est sur le nœud cible : `tailscale debug net
 3. **Transport DERP uniquement** (`direct connection not established`), relais Paris, ~115 ms de
    ping — cohérent avec le « 0 % direct » de la doctrine inter-VM.
 
+### Suite du 25/09 (soir) — Companion dans la VM, navigateur sur le tailnet, recyclage
+
+*Mesuré le 25/09/2026, même session (le conteneur a redémarré en cours de route).*
+
+| Fait | Mesure |
+|---|---|
+| ⭐ **Bitfocus Companion 5.0.6 tourne en headless dans la VM** | archive Linux x64 (386 Mo) → `resources/node-runtimes/main/bin/node main.js --admin-address 127.0.0.1 --extra-module-path <dossier>` ; UI sur :8000, module local chargé en « Dev », API HTTP `/api/location/<page>/<row>/<col>/press` et `/api/variable/<conn>/<var>/value` utilisables pour tester sans UI |
+| Hôtes à autoriser pour ça | `bitfocus.io`, `api.bitfocus.io` (liste des paquets), **`cf-pub.bitfocus.io`** (le téléchargement réel — le seul qui compte, découvert au 403). `developer.bitfocus.io` (store de modules) refusé : warnings en boucle, sans conséquence |
+| Piloter l'UI Companion 5 avec Playwright | ⚠️ l'assistant de bienvenue puis « What's New » réapparaissent à chaque profil neuf → `launchPersistentContext` + fermer `.modal2-viewport button[aria-label="Close modal"]` ; glisser-déposer des presets : `.button-border[title="<nom du preset>"]` (le `title` est le NOM, pas le texte du bouton) |
+| ⭐ **Chromium atteint le tailnet** | `chromium.launch({ proxy: { server: 'socks5://localhost:1055' } })` sur le SOCKS de `tailscaled` : la vraie UI web du Pi s'ouvre, flux SSE compris. Pour une page locale en revanche, `proxy: direct://` a échoué (`ERR_PROXY_CONNECTION_FAILED`) — `--no-proxy-server` a marché |
+| Le recyclage du conteneur tue les tâches suivies | `tailscaled`, serveur de test et Companion arrêtés d'un coup (notification harnais) ; workdir **et** scratchpad intacts, travail poussé intact. Relancer `tailscaled` (tâche suivie) puis `tailscale up` |
+| 🔴 `pkill -f 'node --test'` s'est tué lui-même (exit 144) | l'errata 13, refait à l'identique. Tuer par PID : `ps -eo pid,args \| awk '/[n]ode --test/{print $1}'` |
+
 ---
 
 ## 4. ⭐ GitHub : deux couches d'application, et ce qu'elles refusent
