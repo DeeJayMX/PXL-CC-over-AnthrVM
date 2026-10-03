@@ -222,6 +222,25 @@ fixée **au démarrage de la VM**.
 vide la branche de son contenu. L'arbre redevient identique à `main`, l'historique reste. C'est
 ce qui a été fait sur `pxl-airlink` le 01/08.
 
+**Mesuré le 03/10/2026** (session TurboHQ, VM survivante) — deux faits de plus, à ajouter au tableau sans le
+réécrire :
+
+| Opération | Verdict |
+|---|---|
+| `push` vers une **autre** branche existante du dépôt (`HEAD:master`) | ✅ (avance rapide) |
+| 🔴 `push` de **tags** (`refs/tags/archive/*`, 7 tags annotés) | ❌ **403** sur le POST `receive-pack`, comme la suppression |
+| `git fetch --unshallow origin` | ✅ (2 s) |
+
+> 🔴 **Le clone d'un dépôt de session peut être SUPERFICIEL.** Le 03/10, `PXL-TurboHQ` l'était
+> (`git rev-parse --is-shallow-repository` → `true`, cinq limites dans `.git/shallow`, datées du 31/08
+> au 10/09) ; `PXL-CC-over-AnthrVM`, dans la même VM, ne l'était pas. **Cause non mesurée** (profondeur
+> de clone du harnais ? clone refait par une session précédente ?) — seul l'effet l'est : sur un clone
+> superficiel, `git rev-list --max-parents=0` rend les **limites de troncature comme des racines**,
+> `merge-base` rend « aucune base », `--is-ancestor` répond non à tort, et toute conclusion sur
+> l'histoire est fausse sans qu'aucune commande n'échoue. Voir errata 11.
+> ⇒ **Réflexe : `git rev-parse --is-shallow-repository` avant toute conclusion sur l'histoire d'un
+> dépôt cloné par la session, et `git fetch --unshallow origin` s'il répond `true`.**
+
 ---
 
 ## 5. Outillage préinstallé
@@ -442,6 +461,17 @@ ce qui a été fait sur `pxl-airlink` le 01/08.
    de chercher un mécanisme chez la cible, lire le filtre que le tailnet donne au nœud —
    `tailscale debug netmap`, clé `PacketFilter`.** Deux jours d'hypothèses sur le routage
    d'OMR pour une règle ACL absente.
+
+11. ❌ **« `master` de PXL-TurboHQ repart de zéro le 08/09 : trois racines « Consolidation ». »** (03/10,
+   écrit dans la note de session du dépôt et dit à Eliott) Faux : le clone était **superficiel**, et
+   `git rev-list --max-parents=0` rend les limites de troncature comme des racines. Après
+   `git fetch --unshallow` : 879 commits, **une** racine, du 16/04. L'observation était juste (trois
+   commits sans parent visible), la conclusion tirée trop vite — et trois erreurs en chaîne derrière
+   elle : des branches crues contenues « seulement par contenu », 70 messages de commit crus perdus (des
+   tags d'archive allaient être posés pour les sauver), un fichier « récupéré » qui n'avait été que
+   renommé. Débusqué par un `git push` vers un dépôt jetable qui a refusé : « shallow update not
+   allowed ». **Leçon : avant de raisonner sur une histoire git, vérifier qu'on la voit en entier —
+   `git rev-parse --is-shallow-repository`.** (§4, mesure du 03/10)
 
 ---
 
