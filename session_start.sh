@@ -100,7 +100,11 @@ fi
 if [ -z "${TS_AUTHKEY:-}" ]; then
   dire "⚠️ TS_AUTHKEY absent : pas de tunnel. Voir tunnel_up.sh pour où le poser."
 else
-  if timeout 120 bash "$ICI/tunnel_up.sh" "$PORT" >> "$LOG" 2>&1; then
+  # 🔴 TS_DIR est POSÉ, jamais laissé au défaut de tunnel_up.sh (`$(pwd)/.tailscale`) : lancé depuis
+  # le PARENT (/home/user), ce hook montait le démon dans /home/user/.tailscale pendant que
+  # `tunnel-vivant.mjs` et le ProxyCommand de `pxl-tx` le cherchent dans CE dépôt — un tunnel
+  # VIVANT qui se lisait « failed to connect to local tailscaled » (14/10, mesuré).
+  if TS_DIR="${TS_DIR:-$ICI/.tailscale}" timeout 120 bash "$ICI/tunnel_up.sh" "$PORT" >> "$LOG" 2>&1; then
     # ⚠️ `sed 's/.*· //'` prenait ce qui suit le DERNIER séparateur, donc le tag
     # au lieu de l'URL. On extrait l'URL elle-même, pas une position dans la ligne.
     URL=$(grep -ao 'https://[a-z0-9.-]*\.ts\.net/' "$LOG" | tail -1)
