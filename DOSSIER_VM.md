@@ -92,6 +92,27 @@ mauvaise opération.
    présent ⇒ workdir survivant ; absent ⇒ VM neuve.
 5. Le **scratchpad** sert de boîte noire trans-VM (logs d'expérience, artefacts de session).
 
+### 15/10/2026 — une veille qui tient quand personne ne parle (session TurboHQ, mesuré)
+
+Contexte : la session « TurboHQ » de PXL-TurboHQ veille une boîte aux lettres (MBX, sur une machine du tailnet) par
+une tâche de fond qui SORT dès qu'un message arrive, pour réveiller la session, qui la réarme ensuite.
+
+| Fait | Mesure |
+|---|---|
+| Fin d'une tâche suivie, **aucun tour en cours** | 🔴 **n'a PAS réveillé la session**. Deux fins (13:35:05 et 13:38:55 UTC, la seconde une veille sortie sur courrier), aucun tour. Le suivant n'est venu qu'avec un message humain, à 14:56 |
+| La VM de 14:56 | **neuve** (PID ~200). `tailscaled` en espace utilisateur « Logged out » (NeedsLogin), alors que son état (`~/.ts`) avait survécu. `tailscale up --authkey="$TS_AUTHKEY"` le rétablit aussitôt : la variable est bien présente dans l'environnement de la VM neuve |
+| Ce qui a survécu au recyclage | `/home/user` (dépôts, `~/.pxl`, `~/.ts`) et le scratchpad, comme au §2 |
+| `sleep` au premier plan | refusé par le harnais (« use Monitor … or run_in_background ») |
+| Tâche planifiée côté serveur (`create_trigger`, tir **dans** la session) | créée à 15:09:33 UTC. Un cron horaire `0 * * * *` est ancré sur la minute de création : il devient `9 * * * *`. Premier tir attendu à 16:09 UTC — **à mesurer**. Supposé : il ressuscite la session comme `send_later` le 27/07 |
+
+⚠️ **Divergence avec le 27/07**, où la complétion avait réveillé la session : constatée, pas expliquée. C'est un fait
+nouveau, pas un erratum, car rien ne dit que la mesure du 27/07 était fausse.
+⇒ Règle 3 appliquée : la veille est doublée d'une **tâche planifiée horaire** qui la relance si elle est morte.
+Le dispositif et ses outils sont versionnés dans PXL-TurboHQ, `deploy/claudevm/` :
+- `tunnel_assure.sh` : `tailscaled` détaché et ré-authentifié ;
+- `veille_mbx.sh` : la veille ;
+- le README : les deux moitiés du dispositif, et les pièges déjà payés.
+
 ---
 
 ## 3. Le réseau — un proxy qui n'est pas qu'un proxy
