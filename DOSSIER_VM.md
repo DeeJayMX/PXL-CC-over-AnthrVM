@@ -105,6 +105,11 @@ une tâche de fond qui SORT dès qu'un message arrive, pour réveiller la sessio
 | `sleep` au premier plan | refusé par le harnais (« use Monitor … or run_in_background ») |
 | Tâche planifiée côté serveur (`create_trigger`, tir **dans** la session) | créée à 15:09:33 UTC. Un cron horaire `0 * * * *` est ancré sur la minute de création : il devient `9 * * * *`. Premier tir attendu à 16:09 UTC — **à mesurer**. Supposé : il ressuscite la session comme `send_later` le 27/07 |
 
+**Ajout, 15/10 18:07 UTC — le tir de la tâche planifiée est mesuré.** Elle a tiré à **16:10:44** et **17:10:48 UTC** :
+cron `9 * * * *`, donc **1 min 44-48 s après la minute prévue** (délai de file, constant sur deux tirs). Son prompt
+arrive dans la **même session**, comme un message ; les deux fois la veille battait (fichier de battement < 3 min),
+réponse « Veille MBX : OK ». Toujours **non mesuré** : un tir sur une VM recyclée — aucun recyclage depuis 14:56.
+
 ⚠️ **Divergence avec le 27/07**, où la complétion avait réveillé la session : constatée, pas expliquée. C'est un fait
 nouveau, pas un erratum, car rien ne dit que la mesure du 27/07 était fausse.
 ⇒ Règle 3 appliquée : la veille est doublée d'une **tâche planifiée horaire** qui la relance si elle est morte.
