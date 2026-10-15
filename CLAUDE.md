@@ -142,6 +142,17 @@ Détaillé dans `DOSSIER_VM.md` §4 et §7 — les pièges qui coûtent le plus 
   ⚠️ Et le vérifier ne coûte rien : `ls /home/user/.claude/settings.json`. **Un `ls` qui échoue est
   le seul témoin qui distingue « les hooks tournent » de « les hooks n'existent pas », puisque les
   deux se taisent.**
+- 📬 **AJOUT DU 15/10 — RESTER EN VEILLE MBX QUAND PERSONNE NE PARLE** (demande d'Eliott). La boîte `pxl-switcher`
+  a accumulé **51 messages** : elle n'était lue qu'en `--peek` (rien jamais marqué lu) et seulement quand on parlait à
+  la session — le redémarrage de test de mire-diag de 13:35 UTC, annoncé pour que j'y capture le tube, est passé
+  sans moi. Deux moitiés, et aucune ne suffit seule :
+  **(1)** `bash veille_mbx.sh pxl-switcher 6900` en tâche de fond SUIVIE (`run_in_background`, timeout 7100000) — un
+  `curl` de l'annuaire MBX par minute (jamais `mbx.js who`, un Node complet par appel) ; sur courrier il LIT (sans
+  `--peek`), imprime et SORT, et la session RÉARME ; il écrit un témoin de vie dans `/tmp/veille-mbx.vivant` ;
+  **(2)** la tâche planifiée horaire de la session (« Veille MBX pxl-switcher (horaire) », hh:44 UTC) : témoin frais
+  ⇒ « OK », sinon tunnel, lecture, traitement, réarmement. ⚠️ Le témoin est un FICHIER, pas un `pgrep -f` : la
+  commande qui cherche le motif le contient elle-même (payé le 15/10, deux PID pour un lecteur).
+  Même dispositif chez turbohq (`PXL-TurboHQ/deploy/claudevm/`), sur leurs outils SSH.
 - 🔴 **L'entrant ne passe que si le RELAIS HOME est celui des pairs** (mesuré 03/08, §3 ter).
   La VM est aux USA, elle choisit `nyc` ; un pair européen envoie vers `nyc` et rien n'arrive,
   alors que le sortant marche — asymétrie qui ressemble à une ACL et n'en est pas.
