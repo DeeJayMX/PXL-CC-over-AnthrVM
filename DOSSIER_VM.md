@@ -118,6 +118,22 @@ Le dispositif et ses outils sont versionnés dans PXL-TurboHQ, `deploy/claudevm/
 - `veille_mbx.sh` : la veille ;
 - le README : les deux moitiés du dispositif, et les pièges déjà payés.
 
+### 16/10/2026 01:05 UTC — un redémarrage du conteneur EN PLEINE SESSION, tâche suivie en cours (session TurboHQ, mesuré)
+
+| Fait | Mesure |
+|---|---|
+| Instant | entre le dernier battement de la veille MBX (01:04 UTC, fichier touché toutes les 60 s) et `uptime` = 0 min à 01:05:36 |
+| La tâche suivie en cours (la veille) | **tuée**, et le harnais l'a **dit** : « The container was restarted … task be2jqwazk … now stopped. Re-create them if still needed » — comme le 11-12/09 (§3 bis) |
+| Réveil | 🟢 **le redémarrage a réveillé la session** sans message humain : un tour est parti avec la notification des tâches perdues (premier ordre à 01:05:20). À rapprocher du 15/10 13:35, où la simple FIN d'une tâche n'avait réveillé personne |
+| Ce qui a survécu | `/home/user` : les trois dépôts à leurs commits, sans modification ; le fichier de battement ; `~/.ts` |
+| Ce qui est mort | `tailscaled` (aucun processus). `tunnel_assure.sh` l'a relancé, et la veille relancée lisait le courrier dès 01:05:53 |
+| Courrier | rien de perdu. La boîte MBX garde le courrier jusqu'au `read` : un message posé à 01:05:13, PENDANT le redémarrage, a été lu au premier tour de la veille relancée |
+| Machine après redémarrage | Firecracker, Xeon @ 2,80 GHz, 4 cœurs, 15 Go, AVX-512, 29 Go libres. **Noyau 6.18.44-fc-v114** (§1 a relevé 6.18.5) : une divergence de plus, datée ici sans toucher au §1 |
+| Canari | absent, parce que jamais posé dans cette session. Posé à 01:05:36 : c'est lui qui datera le prochain redémarrage |
+
+⇒ Pour la règle 2 : une tâche suivie tient la VM contre le recyclage d'**inactivité** (§2), pas contre un **redémarrage** du
+conteneur. Ce qui doit survivre vit dans `/home/user` ou dans un service distant, comme la boîte MBX.
+
 ---
 
 ## 3. Le réseau — un proxy qui n'est pas qu'un proxy
