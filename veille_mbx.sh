@@ -12,7 +12,7 @@
 # `ssh pxl-tx` (ProxyCommand `tailscale nc`), pas leurs `tx_ssh.py`/`tunnel_assure.sh`.
 #
 # ─── Ce qu'il fait ────────────────────────────────────────────────────────────
-# Toutes les 60 s, UN curl de l'annuaire (`/api/turbohq/mbx`, lecture seule) — jamais `mbx.js who`, qui lance un Node
+# Toutes les 60 s (côté carte depuis le 16/10, voir plus bas), UN curl de l'annuaire (`/api/turbohq/mbx`, lecture seule) — jamais `mbx.js who`, qui lance un Node
 # complet à chaque appel (la carte voyait « des sessions SSH courtes s'enchaîner », 15/10). Dès qu'un message attend :
 # `mbx.js read` (la boîte se VIDE), on l'imprime et on SORT — la fin de la tâche réveille la session, qui traite puis
 # RÉARME. Au terme de la fenêtre (6900 s, sous le plafond de 2 h d'une tâche de fond) : « fin de fenêtre », à réarmer.
@@ -20,35 +20,61 @@
 # horaire pour savoir s'il tourne — `pgrep -f` se trouverait lui-même dans la ligne de commande qui le cherche.
 # ⚠️ Ce n'est que la moitié : quand le conteneur est recyclé, la veille meurt avec lui. L'autre moitié est la tâche
 # planifiée horaire de la session (« Veille MBX pxl-switcher »).
+#
+# ─── UNE SEULE SESSION SSH, PAS UNE PAR MINUTE (16/10, § 255.15 du DOSSIER_RGA de PXL-Switcher) ─────────────────
+# La première version ouvrait une session `ssh pxl-tx` À CHAQUE TOUR : côté carte, un `tailscaled be-child` et un scope
+# systemd (session-cNNNNN.scope) par minute, et par veille — trois veilles tournaient (la mienne, turbonode,
+# claudevm-vps), soit ~60 sessions/heure. Or l'entrée HDMI de pxl-tx perd ~45 ms d'IRQ de temps en temps, et l'IRQ du
+# récepteur est épinglée au CPU5 ; un scope systemd est né 23 ms avant le trou de 19:53:25 UTC (1 cas sur 3, aucune
+# preuve). Pour que la question se tranche, les veilles cessent toutes d'en ouvrir : la boucle tourne CÔTÉ CARTE, dans
+# une session qui dure toute la fenêtre, et rend une ligne « TIC » par minute (le témoin de vie local suit ces lignes).
+# Une session coupée (tunnel tombé : ServerAlive la ferme en ~90 s) est rouverte, et le tunnel relevé au 3e échec.
 BOITE="${1:-pxl-switcher}"; FENETRE="${2:-6900}"
 ICI="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 U=http://127.0.0.1:8720
 M=/home/radxa/turbohq/pxl-turbohq-client/bin/mbx.js
 VIVANT=/tmp/veille-mbx.vivant
 remonter() { TS_DIR="$ICI/.tailscale" timeout 120 bash "$ICI/tunnel_up.sh" 8710 >/dev/null 2>&1; }
-carte() { timeout 40 ssh -o ConnectTimeout=20 -o BatchMode=yes pxl-tx "$1"; }
+
+# La boucle de la carte : arguments = relais, mbx.js, boîte, secondes restantes.
+BOUCLE_CARTE='U=$1; M=$2; B=$3; fin=$(( $(date +%s) + $4 ))
+while [ "$(date +%s)" -lt "$fin" ]; do
+  n=$(curl -s -m 5 "$U/api/turbohq/mbx" | python3 -I -c "
+import sys, json
+try: print(next((b.get(\"queued\", 0) for b in json.load(sys.stdin) if b.get(\"name\") == sys.argv[1]), 0))
+except Exception: pass" "$B")
+  echo "TIC ${n:-?}"
+  if [ -n "$n" ] && [ "$n" -gt 0 ]; then
+    echo "COURRIER $n"; MBX_URL=$U timeout 15 node "$M" --as "$B" read 2>&1; echo "FIN-COURRIER"; exit 0
+  fi
+  r=$(( fin - $(date +%s) )); [ "$r" -le 0 ] && break
+  sleep $(( r < 60 ? r : 60 ))
+done
+echo "FIN-FENETRE"'
 
 fin=$(( $(date +%s) + FENETRE )); echecs=0
 while [ "$(date +%s)" -lt $fin ]; do
   date -u +%s > "$VIVANT"
-  n=$(carte "curl -s -m 5 $U/api/turbohq/mbx" 2>/dev/null | python3 -c "
-import sys, json
-try: print(next((b.get('queued', 0) for b in json.load(sys.stdin) if b.get('name') == '$BOITE'), 0))
-except Exception: pass")
-  if [ -z "$n" ]; then
-    echecs=$((echecs + 1))
-    [ $echecs = 3 ] && remonter                                                   # tunnel tombé : on le relève
-    [ $echecs = 10 ] && echo "$(date -u +%H:%M:%S) [veille] pxl-tx injoignable depuis ~10 min"
-  else
-    echecs=0
-    if [ "$n" -gt 0 ]; then
-      echo "$(date -u +%H:%M:%S) [veille] $n message(s) pour $BOITE :"
-      carte "MBX_URL=$U timeout 15 node $M --as $BOITE read" 2>&1 | sed 's/\r$//'
-      rm -f "$VIVANT"
-      exit 0
-    fi
-  fi
-  sleep 60
+  etat=rien
+  while IFS= read -r l; do
+    l=${l%$'\r'}
+    case $etat in
+      courrier) [ "$l" = FIN-COURRIER ] && { rm -f "$VIVANT"; exit 0; }; echo "$l" ;;
+      *) case $l in
+           "TIC ?") ;;                                                 # relais muet ce tour-ci : la session vit
+           TIC*) date -u +%s > "$VIVANT"; echecs=0 ;;
+           COURRIER*) echo "$(date -u +%H:%M:%S) [veille] ${l#COURRIER } message(s) pour $BOITE :"; etat=courrier ;;
+           FIN-FENETRE) etat=fini ;;
+         esac ;;
+    esac
+  done < <(ssh -o ConnectTimeout=20 -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 pxl-tx \
+             bash -s -- "$U" "$M" "$BOITE" "$(( fin - $(date +%s) ))" <<<"$BOUCLE_CARTE" 2>/dev/null)
+  [ $etat = courrier ] && { rm -f "$VIVANT"; exit 0; }                  # session coupée en pleine lecture : on rend ce qu'on a
+  [ $etat = fini ] && break
+  echecs=$((echecs + 1))                                                # session tombée avant la fin de la fenêtre
+  [ $echecs = 3 ] && remonter                                           # tunnel tombé : on le relève
+  [ $echecs = 10 ] && echo "$(date -u +%H:%M:%S) [veille] pxl-tx injoignable depuis ~10 essais"
+  sleep 20
 done
 rm -f "$VIVANT"
 echo "$(date -u +%H:%M:%S) [veille] fin de fenêtre, rien reçu"
