@@ -150,6 +150,29 @@ machine n'est plus la même :
 mesure de perf n'est même pas comparable à une mesure de la même session si un redémarrage les sépare. Le canari
 (`uptime` et sa date de boot) suffit à le savoir. `tailscaled` était de nouveau mort, et la veille a été relancée.
 
+**Ajout, 16/10 15:02 UTC — un TROISIÈME « redémarrage du conteneur », SANS redémarrage de la VM, et le port du proxy
+change sous les processus survivants (session TurboHQ, mesuré).** Le harnais annonce le même message qu'à 01:05 (« The
+container was restarted … task bi1gj4qd5 … now stopped ») et réveille la session. Le dernier battement de la veille est
+à 14:59:48, et le premier ordre part à 15:00:50. Mais cette fois-ci :
+
+| Fait | Mesure |
+|---|---|
+| `uptime -s` | **02:03:30**, inchangé : pas de reboot. Même noyau (v139), même Xeon @ 2,10 GHz, 4 cœurs |
+| Canari | présent, et les deux dépôts sont à leurs commits |
+| Processus hors harnais | **vivants** : `tailscaled` (PID 221, lancé après le reboot de 02:03) tourne toujours, sans orphelin de la veille |
+| Tâche suivie (la veille) | tuée et signalée, comme à 01:05 et 02:03 |
+| ⭐ Port du proxy | **39833 → 43071**. `tailscaled` garde dans son environnement l'ancien `HTTPS_PROXY` (lu dans `/proc/221/environ`) |
+| Effet | tunnel **mort en silence**. Le nœud lui-même est « offline » dans `tailscale status`, `tailscale ping` vers pxl-tx ne répond pas, et le SOCKS5 refuse la connexion. Pourtant `BackendState` vaut **« Running »** : `tunnel_assure.sh`, qui ne regarde que la présence du processus et cet état, a conclu que tout allait bien |
+| Remède | `kill` de `tailscaled`, puis `tunnel_assure.sh` le relance avec le port courant : pong vers pxl-tx via DERP en 124 ms |
+| Courrier | rien de perdu : la boîte MBX était vide au `read` |
+
+⇒ Le « port aléatoire par session » du §3 change aussi **à l'intérieur d'une session**, sans reboot. Un « redémarrage
+du conteneur » n'est donc pas un seul événement : ici, la VM et ses processus survivent, mais l'agent et son proxy
+repartent. Tout processus qui a lu `HTTPS_PROXY` à son démarrage pointe alors sur un port mort. Corollaire pratique :
+`BackendState: Running` ne prouve pas que le tunnel marche. Le test qui fait foi est un `tailscale ping` vers un pair,
+ou la comparaison du `HTTPS_PROXY` du processus avec le courant. `tunnel_assure.sh` ne fait encore ni l'un ni l'autre
+(correctif proposé à Eliott, pas posé).
+
 ---
 
 ## 3. Le réseau — un proxy qui n'est pas qu'un proxy
