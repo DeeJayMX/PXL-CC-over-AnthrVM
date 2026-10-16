@@ -134,6 +134,22 @@ Le dispositif et ses outils sont versionnés dans PXL-TurboHQ, `deploy/claudevm/
 ⇒ Pour la règle 2 : une tâche suivie tient la VM contre le recyclage d'**inactivité** (§2), pas contre un **redémarrage** du
 conteneur. Ce qui doit survivre vit dans `/home/user` ou dans un service distant, comme la boîte MBX.
 
+**Ajout, 16/10 02:05 UTC — un SECOND redémarrage, une heure après, et le workdir change de silicium.** Le dernier
+battement de la veille est à 02:03:21, et `uptime` donne 0 min à 02:03:51. ⭐ Le canari posé à 01:05:36 est **présent**,
+avec sa ligne « VM bootée à 01:04:58 », et les trois dépôts sont à leurs commits : le workdir a survécu. Mais la
+machine n'est plus la même :
+
+| | 01:05 UTC | 02:03 UTC |
+|---|---|---|
+| CPU | Xeon @ **2,80 GHz** | Xeon @ **2,10 GHz** |
+| Noyau | 6.18.44-fc-**v114** | 6.18.44-fc-**v139** |
+| Cœurs | 4 | 4 |
+
+⇒ Le « CPU qui change d'une session à l'autre » du §1 change aussi **à l'intérieur d'une session**, d'un redémarrage
+à l'autre : le même `/home/user` est remonté sur un autre hôte. Corollaire, plus fort que la règle du §1 : une
+mesure de perf n'est même pas comparable à une mesure de la même session si un redémarrage les sépare. Le canari
+(`uptime` et sa date de boot) suffit à le savoir. `tailscaled` était de nouveau mort, et la veille a été relancée.
+
 ---
 
 ## 3. Le réseau — un proxy qui n'est pas qu'un proxy
