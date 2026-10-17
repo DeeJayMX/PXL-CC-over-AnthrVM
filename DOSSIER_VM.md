@@ -187,6 +187,19 @@ conteneur » de cette espèce, et ce n'est pas un accident isolé. Le correctif 
 `HTTPS_PROXY` de `tailscaled` au courant, ou faire un `tailscale ping`) attend toujours le go d'Eliott. D'ici là, le
 réflexe après un réveil sur redémarrage est de lancer ces deux commandes avant de croire « Running ».
 
+**Ajout, 17/10 04:38 UTC — un CINQUIÈME redémarrage, 40 min après le quatrième, et cette fois-ci un VRAI reboot.**
+Le dernier battement date de 04:37:02. `uptime -s` donne **04:37:34** : la VM a redémarré, ce que les deux
+précédents n'avaient pas fait.
+- Le canari est présent et les dépôts sont à leurs commits : le workdir a survécu, comme à 01:05 et 02:03 le 16/10.
+- Le noyau (v139) et le Xeon @ 2,10 GHz sont inchangés.
+- `tailscaled` est MORT, puisqu'aucun processus ne survit au reboot. `tunnel_assure.sh` l'a relancé sur le port
+  courant (42327), sans ré-authentification, et pxl-tx a répondu au ping via DERP en 162 ms. Boîte MBX vide.
+⇒ Les deux espèces existent bel et bien, sous le MÊME message du harnais (« The container was restarted ») :
+- le reboot, où tout meurt, `tailscaled` compris, et où `tunnel_assure.sh` suffit ;
+- le redémarrage sans reboot, où les processus survivent mais où le port du proxy change : là, `tunnel_assure.sh`
+  NE suffit PAS.
+Seul `uptime -s` les distingue.
+
 ---
 
 ## 3. Le réseau — un proxy qui n'est pas qu'un proxy
