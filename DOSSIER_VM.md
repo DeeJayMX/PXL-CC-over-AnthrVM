@@ -173,6 +173,20 @@ repartent. Tout processus qui a lu `HTTPS_PROXY` à son démarrage pointe alors 
 ou la comparaison du `HTTPS_PROXY` du processus avec le courant. `tunnel_assure.sh` ne fait encore ni l'un ni l'autre
 (correctif proposé à Eliott, pas posé).
 
+**Ajout, 17/10 03:58 UTC — un QUATRIÈME redémarrage, de la même espèce : le mécanisme est reproduit.** Le dernier
+battement de la veille date de 03:56:02, le premier ordre part à 03:57:40. Les mêmes constats qu'à 15:00 :
+- `uptime -s` vaut toujours **02:03:30** : pas de reboot, même noyau v139, même Xeon @ 2,10 GHz ;
+- le canari est présent (posé le 16/10 à 15:00:50) ;
+- `tailscaled` (PID 26228) est vivant, mais reste sur le port de proxy d'AVANT : **43071 → 46741**. Le tunnel est donc
+  mort sans le dire ;
+- même remède : `kill`, puis `tunnel_assure.sh`, et pong vers pxl-tx via DERP en 116 ms. La boîte MBX était vide :
+  rien de perdu.
+
+⇒ Trois ports en 26 h sans reboot : 39833 → 43071 → 46741. Le port du proxy change à CHAQUE « redémarrage du
+conteneur » de cette espèce, et ce n'est pas un accident isolé. Le correctif de `tunnel_assure.sh` (comparer le
+`HTTPS_PROXY` de `tailscaled` au courant, ou faire un `tailscale ping`) attend toujours le go d'Eliott. D'ici là, le
+réflexe après un réveil sur redémarrage est de lancer ces deux commandes avant de croire « Running ».
+
 ---
 
 ## 3. Le réseau — un proxy qui n'est pas qu'un proxy
