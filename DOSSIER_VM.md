@@ -396,6 +396,10 @@ réécrire :
   Windows à l'aveugle. Ce qui touche le GPU reste pour le PC.
 - **Supposé, non mesuré :** `qemu-user` s'installerait de la même façon. Cela toucherait la ligne « Exécuter du code
   ARM » du §7.
+- **Ajout, 17/10 09:40 UTC — la méthode est versée au dépôt PXL-TurboHQ :** `pxl-virtual-decklink/wine/banc_wine.sh`.
+  Une commande installe les outils, compile l'arbre de travail ET la référence (HEAD), pose le faux DeckLinkAPI dans
+  le préfixe, lance les deux bancs et compare leurs échecs. Contre-épreuve : une faute injectée ressort seule, avec le
+  code 1. ~1,5 min, préfixe Wine gardé.
 
 ---
 
