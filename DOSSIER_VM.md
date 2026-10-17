@@ -374,6 +374,29 @@ réécrire :
 > *compile* et lire l'assembleur ; on ne peut pas prouver que ça *calcule juste*. C'est
 > exactement la limite que `PXL-StageBox` consigne (« bit-exact non prouvé »).
 
+### 17/10/2026 — ⭐ du code WINDOWS compilé ET exécuté dans la VM (session TurboHQ, mesuré)
+
+- **`apt-get install -y --no-install-recommends g++-mingw-w64-x86-64-posix wine64` passe** par le proxy, en ~1 min
+  pour les deux (Ubuntu noble : GCC 13 mingw-w64, Wine 9.0).
+- **mingw-w64 cross-compile un vrai DLL COM Windows et son banc console.** Le cas : `pxl-virtual-decklink` de
+  PXL-TurboHQ, qui touche D3D11, COM et Win32. La commande : `x86_64-w64-mingw32-g++ -std=c++17 -shared … x.def -static
+  -lole32 -loleaut32 -luuid -ld3d11 …`. Il a trouvé une vraie faute que MSVC masquait : `#include <memory>` manquant.
+- **`wine64 banc.exe` l'exécute.** Réglages : `WINEPREFIX` dans le scratchpad, `WINEDEBUG=-all`, et
+  `WINEDLLOVERRIDES="mscoree,mshtml="` (sinon Wine propose Mono et Gecko). Ce qui marche : mémoire partagée nommée,
+  événements, fils, minuteur haute résolution (`CREATE_WAITABLE_TIMER_HIGH_RESOLUTION`), COM en processus.
+- **Limites mesurées :**
+  - aucune texture D3D11 partagée par handle NT : sans GPU, la création échoue ;
+  - aucun plafond mémoire par objet job : `JOB_OBJECT_LIMIT_PROCESS_MEMORY` reste sans effet.
+- **Méthode.** Le DLL d'AVANT les changements tourne dans le même Wine (la référence intercalée, §1) : 97/110 avant,
+  109/129 après, avec les MÊMES 13 échecs d'environnement. Sans cette référence, ces échecs se seraient lus comme des
+  régressions.
+- **Une dépendance absente se remplace par un faux minimal, gardé dans le scratchpad.** Le cas : le `DeckLinkAPI64.dll`
+  de Blackmagic, que le proxy exige.
+- **Règle.** « On ne peut pas compiler ici » n'est plus vrai pour Windows : tenter mingw + Wine avant de livrer du C++
+  Windows à l'aveugle. Ce qui touche le GPU reste pour le PC.
+- **Supposé, non mesuré :** `qemu-user` s'installerait de la même façon. Cela toucherait la ligne « Exécuter du code
+  ARM » du §7.
+
 ---
 
 ## 6. Navigateur, WebGPU, WebCodecs
@@ -491,6 +514,10 @@ réécrire :
 | Plafonner la VRAM par un flag Chromium | §6 piège 4 |
 | **Afficher un canvas WebGPU** (et donc tester un rendu à l'écran) | §6 piège 6 — présenter perd le device |
 | **HEVC en WebCodecs** | §6 piège 7 — même le vrai Chrome ne l'embarque pas sous Linux |
+
+> ⚠️ **17/10/2026 — réserve sur la ligne ARM ci-dessus (non mesurée).** `apt-get install` passe désormais par le
+> proxy (mingw-w64 et Wine installés et exécutés ce jour-là, §5). `qemu-user` est donc probablement installable lui
+> aussi : à mesurer avant de recopier « définitivement ».
 
 ---
 
