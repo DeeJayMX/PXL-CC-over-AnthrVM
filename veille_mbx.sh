@@ -12,8 +12,9 @@
 # `ssh pxl-tx` (ProxyCommand `tailscale nc`), pas leurs `tx_ssh.py`/`tunnel_assure.sh`.
 #
 # ─── Ce qu'il fait ────────────────────────────────────────────────────────────
-# Toutes les 60 s (côté carte depuis le 16/10, voir plus bas), UN curl de l'annuaire (`/api/turbohq/mbx`, lecture seule) — jamais `mbx.js who`, qui lance un Node
-# complet à chaque appel (la carte voyait « des sessions SSH courtes s'enchaîner », 15/10). Dès qu'un message attend :
+# (Jusqu'au 17/10 au soir : toutes les 60 s, côté carte depuis le 16/10, UN curl de l'annuaire (`/api/turbohq/mbx`, lecture seule) — jamais `mbx.js who`, qui lance un Node
+# complet à chaque appel (la carte voyait « des sessions SSH courtes s'enchaîner », 15/10). Depuis : la SONNETTE, voir
+# la boucle de la carte.) Dès qu'un message attend :
 # `mbx.js read` (la boîte se VIDE), on l'imprime et on SORT — la fin de la tâche réveille la session, qui traite puis
 # RÉARME. Au terme de la fenêtre (6900 s, sous le plafond de 2 h d'une tâche de fond) : « fin de fenêtre », à réarmer.
 # ⭐ Il écrit un TÉMOIN DE VIE à chaque tour (`/tmp/veille-mbx.vivant`, l'heure) : c'est ce que lit la tâche planifiée
@@ -37,20 +38,35 @@ VIVANT=/tmp/veille-mbx.vivant
 remonter() { TS_DIR="$ICI/.tailscale" timeout 120 bash "$ICI/tunnel_up.sh" 8710 >/dev/null 2>&1; }
 
 # La boucle de la carte : arguments = relais, mbx.js, boîte, secondes restantes.
+# LA SONNETTE (17/10 au soir, même version que turbohq 5b423aa) : plus de relevé toutes les 60 s. On s'abonne au flux SSE
+# de la boîte (`/api/turbohq/mbx/<boîte>/stream` : le relais y pousse chaque message à l'instant, et `: ping` toutes
+# les 15 s), PUIS on lit l'annuaire 0,5 s après — un message tombé entre les deux est vu par l'un ou par l'autre, jamais
+# par aucun. Le flux ne VIDE rien (le `read` seul vide). Une ligne « TIC » par ligne non vide du flux (≤ 15 s) : le
+# témoin de vie local suit. Flux muet 50 s, ou fini (10 min au plus) : on se réabonne, dans la MÊME session SSH.
 BOUCLE_CARTE='U=$1; M=$2; B=$3; fin=$(( $(date +%s) + $4 ))
-while [ "$(date +%s)" -lt "$fin" ]; do
+courrier() { echo "COURRIER $1"; MBX_URL=$U timeout 15 node "$M" --as "$B" read 2>&1; echo "FIN-COURRIER"; exit 0; }
+while :; do
+  r=$(( fin - $(date +%s) )); [ "$r" -gt 600 ] && r=600; [ "$r" -lt 5 ] && break
+  exec 3< <(curl -sN -m "$r" --speed-time 45 --speed-limit 1 "$U/api/turbohq/mbx/$B/stream" 2>/dev/null; echo FLUX-FIN)
+  p=$!; sleep 0.5
   n=$(curl -s -m 5 "$U/api/turbohq/mbx" | python3 -I -c "
 import sys, json
 try: print(next((b.get(\"queued\", 0) for b in json.load(sys.stdin) if b.get(\"name\") == sys.argv[1]), 0))
 except Exception: pass" "$B")
   echo "TIC ${n:-?}"
-  if [ -n "$n" ] && [ "$n" -gt 0 ]; then
-    echo "COURRIER $n"; MBX_URL=$U timeout 15 node "$M" --as "$B" read 2>&1; echo "FIN-COURRIER"; exit 0
-  fi
-  r=$(( fin - $(date +%s) )); [ "$r" -le 0 ] && break
-  sleep $(( r < 60 ? r : 60 ))
+  if [ -n "$n" ] && [ "$n" -gt 0 ]; then pkill -P "$p" curl; courrier "$n"; fi
+  while IFS= read -r -t 50 -u 3 l; do
+    case "$l" in
+      "data: "*) pkill -P "$p" curl; courrier 1 ;;
+      FLUX-FIN) break ;;
+      "") ;;
+      *) echo "TIC" ;;
+    esac
+  done
+  pkill -P "$p" curl 2>/dev/null; exec 3<&-
 done
 echo "FIN-FENETRE"'
+
 
 fin=$(( $(date +%s) + FENETRE )); echecs=0
 while [ "$(date +%s)" -lt $fin ]; do
