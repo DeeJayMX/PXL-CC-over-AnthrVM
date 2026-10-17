@@ -200,6 +200,16 @@ précédents n'avaient pas fait.
   NE suffit PAS.
 Seul `uptime -s` les distingue.
 
+**Ajout, 17/10 17:35 UTC — un SIXIÈME redémarrage, sans reboot, et une précision sur « les processus survivent ».**
+- `uptime -s` vaut toujours **04:37:34** : pas de reboot.
+- Le port du proxy passe de **42327 à 41719**. `tailscaled` (PID 199) est vivant, mais il reste sur l'ancien port.
+  Même remède : `kill`, puis `tunnel_assure.sh`. Boîte MBX vide.
+- 🟡 **La précision.** La veille MBX, une tâche de fond SUIVIE par le harnais, n'a PAS survécu : aucun processus
+  `veille_mbx` après le réveil, et le harnais l'annonce (« background tasks … are now stopped »). `tailscaled`, lancé
+  HORS du harnais, a survécu, lui.
+⇒ « Les processus survivent » ne vaut que pour les démons lancés hors du harnais. Ses tâches de fond, il les arrête
+lui-même. Après un réveil de cette espèce, il faut donc relancer la veille ET réparer le tunnel.
+
 ---
 
 ## 3. Le réseau — un proxy qui n'est pas qu'un proxy
