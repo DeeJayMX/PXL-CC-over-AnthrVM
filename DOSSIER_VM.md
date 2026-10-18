@@ -45,6 +45,7 @@ nouveau : le mesurer, le dater, l'ajouter — jamais mettre à jour ce dossier d
 | Noyau | `adjtimex` : **STA_UNSYNC**, freq 0,000 ppm, tick 10000 — personne ne discipline l'horloge de l'intérieur |
 | Source | `clocksource` = **tsc** (Firecracker) |
 | Écart | **−0,07 s** contre l'en-tête `Date` du VPS `thq.pxl.re` (timesyncd), résolution 1 s, aller-retour 0,84 s — après **29,9 h** sans démon (VM bootée le 17/10 04:37:34 UTC, le vrai reboot du 5e redémarrage, §2) |
+| Écart, seconde référence | **+1,09 s** contre `pypi.org` (la sonde, 10:35 UTC, aller-retour 1,52 s). Les deux références se contredisent de 1,2 s : la méthode (en-tête `Date`, à la seconde, derrière un aller-retour d'une seconde) ne vaut pas mieux que **±1 s**. « Juste à la seconde » est tout ce qu'elle peut dire — pas « −0,07 s » |
 | Fuseau | `/etc/localtime → Etc/UTC`, `TZ` vide ; `tzdata` complet (`Europe/Paris` présent) |
 | Le réseau PXL | pxl-tx et la box sont en **Europe/Paris** (la box : `timedatectl` Europe/Paris, `date` CEST ; `/etc/timezone` y dit encore `Etc/UTC`, fichier périmé). Ce sont les **sessions** qui écrivent en UTC dans MBX et les journaux, pas les machines |
 
