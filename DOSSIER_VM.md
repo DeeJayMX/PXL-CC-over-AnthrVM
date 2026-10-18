@@ -36,6 +36,32 @@ nouveau : le mesurer, le dater, l'ajouter — jamais mettre à jour ce dossier d
 > ⇒ **Ne jamais comparer une mesure de perf à une mesure d'une autre session sans référence
 > réintercalée dans la même VM.**
 
+**Ajout, 18/10 10:10 UTC (12h10 heure française) — l'horloge, mesurée : pas de NTP, juste quand même, et en UTC
+(session TurboHQ ; question d'Eliott : « est-ce que la VM a du NTP ? je dois ajouter 2 h à chaque fois »).**
+
+| | Mesuré |
+|---|---|
+| Démon NTP | **aucun** (ni `chronyd`, ni `ntpd`, ni `systemd-timesyncd` ; `timedatectl` présent mais pas de systemd) |
+| Noyau | `adjtimex` : **STA_UNSYNC**, freq 0,000 ppm, tick 10000 — personne ne discipline l'horloge de l'intérieur |
+| Source | `clocksource` = **tsc** (Firecracker) |
+| Écart | **−0,07 s** contre l'en-tête `Date` du VPS `thq.pxl.re` (timesyncd), résolution 1 s, aller-retour 0,84 s — après **29,9 h** sans démon (VM bootée le 17/10 04:37:34 UTC, le vrai reboot du 5e redémarrage, §2) |
+| Fuseau | `/etc/localtime → Etc/UTC`, `TZ` vide ; `tzdata` complet (`Europe/Paris` présent) |
+| Le réseau PXL | pxl-tx et la box sont en **Europe/Paris** (la box : `timedatectl` Europe/Paris, `date` CEST ; `/etc/timezone` y dit encore `Etc/UTC`, fichier périmé). Ce sont les **sessions** qui écrivent en UTC dans MBX et les journaux, pas les machines |
+
+- **Lecture** : l'heure est juste à la seconde sans qu'aucun service ne la tienne — l'hôte la pose au démarrage de la
+  microVM, et 30 h plus tard elle n'a pas bougé de plus de 0,5 s (< 5 ppm, ou l'hôte la retient : **supposé**, kvm-clock
+  ou le tsc de l'hôte ; non distingué). Rien ne se mesure dans la VM : ça suffit. On ne peut pas y mettre NTP
+  (pas de systemd, et `adjtimex` en écriture demanderait CAP_SYS_TIME — **non essayé**, inutile).
+- **Les 2 h sont le fuseau, pas la synchro.** Remède durable : la variable d'environnement **`TZ=Europe/Paris`** dans
+  les réglages de l'environnement cloud (menu de l'environnement dans la barre de titre → Edit) — chaque nouvelle
+  session la prend — ou, dans le script de configuration de l'environnement, `ln -sf
+  /usr/share/zoneinfo/Europe/Paris /etc/localtime`, qui ne dépend d'aucun shell. ⚠ `~/.bashrc` ne sert à RIEN ici :
+  le shell de l'outil Bash ne le lit pas (mesuré le 18/10 : `export TZ` posé dedans, `date` répondait toujours en
+  UTC). Pour la session en cours, le lien `/etc/localtime` (root) fait l'affaire : posé le 18/10 dans cette VM,
+  `date`, Python et Node répondent en heure française aussitôt. ⚠ Corollaire : `uptime -s` et `date` sans `-u` parlent
+  alors en heure française — `vm_survey.sh` convertit explicitement (section Horloge ajoutée, et le canari dit
+  « UTC » à raison).
+
 ---
 
 ## 2. ⭐ Le cycle de vie — et la correction du 01/08

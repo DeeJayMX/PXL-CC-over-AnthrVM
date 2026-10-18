@@ -60,6 +60,10 @@ branche.
 **On peut compiler pour ARM sans cross-toolchain** (`clang --target=aarch64-linux-gnu`), mais
 **pas exécuter** — il n'y a pas de `qemu-user`. La correction se prouve, l'exactitude non.
 
+**La VM est en UTC et n'a pas de NTP** (mesuré le 18/10) : l'heure vient de l'hôte et elle est juste à la
+seconde, mais `date` répond en UTC — la variable d'environnement `TZ=Europe/Paris`, posée dans les réglages de
+l'environnement, la met en heure française pour toutes les sessions. `vm_survey.sh` a une section Horloge.
+
 ## ⚠️ Statut des chiffres
 
 Tout est mesuré depuis l'intérieur, sondes à l'appui — sauf trois points marqués comme tels dans

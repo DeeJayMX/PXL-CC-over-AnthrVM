@@ -24,9 +24,35 @@ kv "cœurs"         "$(nproc)"
 kv "RAM"           "$(free -g | awk '/Mem:/{print $2}') Go"
 kv "CPU"           "$(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | sed 's/^ *//')"
 kv "AVX-512"       "$(grep -m1 flags /proc/cpuinfo | tr ' ' '\n' | grep -c '^avx512') jeux"
-kv "boot"          "$(uptime -s) UTC"
+kv "boot"          "$(date -u -d "$(uptime -s)" '+%F %T') UTC"   # uptime -s parle en heure LOCALE (TZ) : converti explicitement
 kv "uptime"        "$(awk '{printf "%d min", $1/60}' /proc/uptime)"
 kv "disque libre"  "$(df -h / | awk 'NR==2{print $4" libres sur "$2" affichés — le quota est le chiffre LIBRE"}')"
+
+sec "Horloge (18/10 : pas de démon NTP dans la VM — l'heure vient de l'hôte, juste à la seconde ; le fuseau est UTC sauf TZ)"
+kv "fuseau"        "TZ=${TZ:-—} · /etc/localtime → $(readlink /etc/localtime 2>/dev/null | sed 's#.*/zoneinfo/##') · date dit $(date '+%T %Z')"
+ntpd_vu=$(for d in chronyd ntpd systemd-timesyncd; do command -v "$d" 2>/dev/null; done | tr '\n' ' ')
+kv "démon NTP"     "${ntpd_vu:-— (aucun)}"
+kv "noyau"         "$(python3 - <<'PY'
+import ctypes
+class TX(ctypes.Structure):
+    _fields_ = [('modes', ctypes.c_uint), ('offset', ctypes.c_long), ('freq', ctypes.c_long), ('maxerror', ctypes.c_long),
+                ('esterror', ctypes.c_long), ('status', ctypes.c_int), ('constant', ctypes.c_long), ('precision', ctypes.c_long),
+                ('tolerance', ctypes.c_long), ('tv_sec', ctypes.c_long), ('tv_usec', ctypes.c_long), ('tick', ctypes.c_long),
+                ('ppsfreq', ctypes.c_long), ('jitter', ctypes.c_long), ('shift', ctypes.c_int), ('stabil', ctypes.c_long),
+                ('jitcnt', ctypes.c_long), ('calcnt', ctypes.c_long), ('errcnt', ctypes.c_long), ('stbcnt', ctypes.c_long),
+                ('tai', ctypes.c_int), ('pad', ctypes.c_int * 11)]
+t = TX(); ctypes.CDLL(None).adjtimex(ctypes.byref(t))
+print(('NON disciplinée (STA_UNSYNC)' if t.status & 0x40 else 'disciplinée') + ' · freq %+.3f ppm · tick %d' % (t.freq / 65536, t.tick))
+PY
+) · clocksource $(cat /sys/devices/system/clocksource/clocksource0/current_clocksource)"
+# L'écart, contre l'en-tête Date de pypi.org (dans noProxy, donc joignable de toute session ; CDN à l'heure) :
+# résolution 1 s, juste si |écart| < 0,5 s. api.github.com ne convient pas : à travers le proxy, HEAD donne 400.
+t0=$(date +%s.%N); dh=$(curl -s -D - -o /dev/null --max-time 5 https://pypi.org/simple/ 2>/dev/null | tr -d '\r' | grep -i '^date:' | head -1 | cut -d' ' -f2-); t1=$(date +%s.%N)
+if [ -n "$dh" ]; then
+  kv "écart vs pypi.org" "$(python3 -c "from email.utils import parsedate_to_datetime as p; print('%+.2f s (résolution 1 s, aller-retour %.2f s)' % ((($t0 + $t1) / 2) - p('$dh').timestamp(), $t1 - $t0))")"
+else
+  kv "écart vs pypi.org" "pas d'en-tête Date (réseau ?)"
+fi
 
 sec "Persistance du workdir (le fait qui décide si un commit non poussé survit)"
 BOOT=$(date -u -d "$(uptime -s)" +%s)
@@ -70,7 +96,7 @@ kv "PLAYWRIGHT_BROWSERS_PATH" "${PLAYWRIGHT_BROWSERS_PATH:-—}"
 if [ "${1:-}" = "--canary" ]; then
   sec "Canari"
   [ -f "$CANARY" ] && kv "précédent" "$(cat "$CANARY")" || kv "précédent" "aucun (première pose)"
-  echo "posé le $(date -u '+%F %T') UTC, VM bootée à $(uptime -s)" > "$CANARY"
+  echo "posé le $(date -u '+%F %T') UTC, VM bootée à $(date -u -d "$(uptime -s)" '+%F %T') UTC" > "$CANARY"
   kv "posé" "$CANARY"
   echo "  (au prochain réveil : présent ⇒ le workdir a survécu · absent ⇒ VM neuve + clone frais)"
 fi

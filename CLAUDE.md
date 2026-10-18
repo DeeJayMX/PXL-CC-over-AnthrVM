@@ -20,6 +20,13 @@ bash probes/vm_survey.sh --canary
 
 Le canari présent ⇒ workdir survivant. Absent ⇒ VM neuve.
 
+**L'heure (18/10/2026, Eliott : « je dois ajouter 2 h à chaque fois »).** La VM est en **UTC**, sans démon NTP (l'heure
+vient de l'hôte, juste à la seconde — `vm_survey.sh`, section Horloge). Les machines du réseau (pxl-tx, la box) sont
+en **Europe/Paris**. Pour Eliott, toute heure s'écrit en **heure française** ; si `date` répond encore en UTC
+(`TZ` non posé par l'environnement), `ln -sf /usr/share/zoneinfo/Europe/Paris /etc/localtime` pour la session
+(`~/.bashrc` ne sert à rien : le shell de l'outil ne le lit pas). Dans un script, `date -u` quand c'est de l'UTC
+qu'on veut, et le dire (`uptime -s` parle toujours en heure locale).
+
 ## La règle de rédaction, et elle est inhabituelle
 
 ⚠️ **Une VM n'est pas l'autre.** Le silicium, les ports du proxy et les révisions d'outils
