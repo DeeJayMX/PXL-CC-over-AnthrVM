@@ -210,6 +210,19 @@ Seul `uptime -s` les distingue.
 ⇒ « Les processus survivent » ne vaut que pour les démons lancés hors du harnais. Ses tâches de fond, il les arrête
 lui-même. Après un réveil de cette espèce, il faut donc relancer la veille ET réparer le tunnel.
 
+**Ajout, 18/10 06:31 UTC — un SEPTIÈME redémarrage, sans reboot, et un détail sur la relance du tunnel.**
+- `uptime -s` vaut toujours **04:37:34** (le 17/10) : pas de reboot. Le canari est présent : le workdir a survécu.
+- Le port du proxy passe de **41719 à 43537**. `tailscaled` (PID 23907) est vivant, mais sur l'ancien port :
+  `tx_ssh.py` reçoit « SOCKS refuse la connexion ». Même remède : `kill` (PID exact, ligne de commande vérifiée),
+  puis `tunnel_assure.sh`.
+- 🟡 **Le détail.** Lancé juste après le `kill` (10 s d'attente au plus), `tunnel_assure.sh` n'a rien imprimé, et
+  aucun `tailscaled` ne tournait après lui. Un second appel a suffi : « Running », et pxl-tx répond. Cause non
+  établie [H : le processus tué n'avait pas encore disparu quand le `pgrep` du script l'a cherché, d'où pas de
+  relance]. Réflexe : après le `kill`, vérifier qu'aucun `tailscaled` ne reste, relancer, puis vérifier
+  `tx_ssh.py "echo ok"` avant de réarmer la veille.
+- La veille MBX, tâche suivie, est morte avec le redémarrage, comme le 17/10 à 17:35. Relancée à 06:33. Les messages
+  arrivés entre-temps restent dans la boîte : la veille les lit dès son départ.
+
 ---
 
 ## 3. Le réseau — un proxy qui n'est pas qu'un proxy
