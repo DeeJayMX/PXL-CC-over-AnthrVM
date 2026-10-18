@@ -24,7 +24,10 @@ kv "cœurs"         "$(nproc)"
 kv "RAM"           "$(free -g | awk '/Mem:/{print $2}') Go"
 kv "CPU"           "$(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | sed 's/^ *//')"
 kv "AVX-512"       "$(grep -m1 flags /proc/cpuinfo | tr ' ' '\n' | grep -c '^avx512') jeux"
-kv "boot"          "$(date -u -d "$(uptime -s)" '+%F %T') UTC"   # uptime -s parle en heure LOCALE (TZ) : converti explicitement
+# btime de /proc/stat : une ÉPOQUE, sans fuseau. ⚠ Piège du 18/10 : `date -u -d "$(uptime -s)"` lit l'ENTRÉE en UTC aussi
+# (-u vaut pour tout le processus), donc 2 h de trop dès que TZ ≠ UTC — le boot, le seuil du reflog et le canari étaient faux.
+BTIME=$(awk '/^btime/{print $2}' /proc/stat)
+kv "boot"          "$(date -u -d @"$BTIME" '+%F %T') UTC ($(date -d @"$BTIME" '+%T %Z'))"
 kv "uptime"        "$(awk '{printf "%d min", $1/60}' /proc/uptime)"
 kv "disque libre"  "$(df -h / | awk 'NR==2{print $4" libres sur "$2" affichés — le quota est le chiffre LIBRE"}')"
 
@@ -55,7 +58,7 @@ else
 fi
 
 sec "Persistance du workdir (le fait qui décide si un commit non poussé survit)"
-BOOT=$(date -u -d "$(uptime -s)" +%s)
+BOOT=$BTIME   # époque du boot (voir plus haut) : ne pas repasser par uptime -s ni date -d
 # $HOME vaut /root ici : les clones sont dans le répertoire de travail, pas chez l'utilisateur
 WORK=${WORK:-/home/user}
 for d in "$WORK"/*/; do
@@ -96,7 +99,7 @@ kv "PLAYWRIGHT_BROWSERS_PATH" "${PLAYWRIGHT_BROWSERS_PATH:-—}"
 if [ "${1:-}" = "--canary" ]; then
   sec "Canari"
   [ -f "$CANARY" ] && kv "précédent" "$(cat "$CANARY")" || kv "précédent" "aucun (première pose)"
-  echo "posé le $(date -u '+%F %T') UTC, VM bootée à $(date -u -d "$(uptime -s)" '+%F %T') UTC" > "$CANARY"
+  echo "posé le $(date -u '+%F %T') UTC, VM bootée à $(date -u -d @"$BTIME" '+%F %T') UTC" > "$CANARY"
   kv "posé" "$CANARY"
   echo "  (au prochain réveil : présent ⇒ le workdir a survécu · absent ⇒ VM neuve + clone frais)"
 fi

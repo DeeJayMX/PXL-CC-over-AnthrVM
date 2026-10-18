@@ -252,6 +252,17 @@ lui-même. Après un réveil de cette espèce, il faut donc relancer la veille E
 
 ---
 
+**Ajout, 18/10 17h12 (heure française ; 15:12 UTC) — un HUITIÈME redémarrage, et un VRAI reboot (le 2e de cette
+espèce, après le 5e).** Dernier battement de la veille à 17:10:17 CEST ; `btime` (/proc/stat) = **15:10:43 UTC**
+(17:10:43 CEST), uptime 0 min au réveil. Comme au 5e : **le disque a tout gardé** — le canari du 06:31 UTC, les
+dépôts à leurs commits, et aussi `/etc/localtime → Europe/Paris` et `~/.bashrc` posés 4 h plus tôt (la VM se
+réveille en heure française) ; **tout processus est mort** — `tailscaled` (0 processus), la tâche de fond de la
+veille (le harnais le dit) ; **le port du proxy a changé**, 43537 → 33019. `tunnel_assure.sh` UNE fois a suffi :
+« Running », SSH sur pxl-tx 90 s après le réveil (17:12:16 CEST). ⚠ C'est à ce réveil que la sonde a montré son
+propre bug (erratum 12) : « boot 17:10:43 UTC » pour une VM bootée à 15:10:43 UTC.
+
+---
+
 ## 3. Le réseau — un proxy qui n'est pas qu'un proxy
 
 Tout l'egress passe par `HTTPS_PROXY` (**port aléatoire par session** : 42041 le 01/08).
@@ -661,6 +672,17 @@ réécrire :
    renommé. Débusqué par un `git push` vers un dépôt jetable qui a refusé : « shallow update not
    allowed ». **Leçon : avant de raisonner sur une histoire git, vérifier qu'on la voit en entier —
    `git rev-parse --is-shallow-repository`.** (§4, mesure du 03/10)
+
+12. ❌ **« `date -u -d "$(uptime -s)"` convertit l'heure locale de `uptime -s` en UTC. »** (écrit le 18/10 à
+   10:35 UTC, démenti à 15:12 UTC) Faux : `-u` vaut pour TOUT le processus, l'ENTRÉE de `-d` est lue en UTC
+   aussi — le résultat est l'heure locale ré-étiquetée « UTC », +2 h en CEST. Le piège a été écrit au moment
+   même où la VM passait en heure française (77b605f, « converti explicitement »), et il touchait trois lignes
+   de `vm_survey.sh` : le « boot » affiché, le canari, et surtout `BOOT`, le seuil du reflog qui décide « clone
+   SURVIVANT / NEUF » — 2 h de trop, donc un clone frais de moins de 2 h aurait passé pour survivant. Tant que
+   TZ était UTC, la ligne était juste par accident ; vu au premier réveil en heure française (le 8e
+   redémarrage, §2). Correctif : `btime` de `/proc/stat`, une époque, sans fuseau. **Leçon : une conversion de
+   fuseau se vérifie contre une époque (`@secondes`), jamais en relisant la sortie ; et changer TZ est une
+   mesure à refaire pour tout ce qui lit `date` sans `@` ni `-u` des deux côtés.**
 
 ---
 
