@@ -261,6 +261,13 @@ veille (le harnais le dit) ; **le port du proxy a changé**, 43537 → 33019. `t
 « Running », SSH sur pxl-tx 90 s après le réveil (17:12:16 CEST). ⚠ C'est à ce réveil que la sonde a montré son
 propre bug (erratum 12) : « boot 17:10:43 UTC » pour une VM bootée à 15:10:43 UTC.
 
+**Ajout, 19/10 03h51 (heure française ; 01:51 UTC) — un NEUVIÈME redémarrage, vrai reboot encore, 10 h 40 après le
+huitième.** Dernier battement de la veille 03:50:44 CEST ; `btime` = **01:50:56 UTC** (03:50:56 CEST), uptime 0,5 min au
+réveil. Même espèce que le 8e : disque gardé (canari du 15:13 UTC, `/etc/localtime` Paris, dépôts à jour), processus
+morts (`tailscaled` 0, la tâche de fond de la veille), **port du proxy 33019 → 38323**. `tunnel_assure.sh` une fois :
+« Running », SSH sur pxl-tx à 03:51:42 (46 s après le réveil). La sonde corrigée (btime) donne le bon boot du premier coup.
+Deux vrais reboots en 11 h après deux jours sans : la fréquence varie, rien ne l'annonce.
+
 ---
 
 ## 3. Le réseau — un proxy qui n'est pas qu'un proxy
