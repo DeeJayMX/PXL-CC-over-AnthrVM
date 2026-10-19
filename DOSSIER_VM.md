@@ -268,6 +268,15 @@ morts (`tailscaled` 0, la tâche de fond de la veille), **port du proxy 33019 �
 « Running », SSH sur pxl-tx à 03:51:42 (46 s après le réveil). La sonde corrigée (btime) donne le bon boot du premier coup.
 Deux vrais reboots en 11 h après deux jours sans : la fréquence varie, rien ne l'annonce.
 
+**Ajout, 19/10 16h50 (heure française) — un DIXIÈME redémarrage, SANS reboot (uptime 777 min, même `btime`), 13 h après le
+neuvième.** Dernier battement 16:47:27 CEST ; **port du proxy 38323 → 39581** ; `tailscaled` vivant (1 processus) mais
+PÉRIMÉ : `tunnel_assure.sh` répond « Running » et pourtant `tx_ssh.py` échoue (« SOCKS refuse la connexion ») — l'espèce
+du 6e et du 7e, reproduite. Remède : tuer `tailscaled`, puis `tunnel_assure.sh` — UNE fois a suffi cette fois (deux le 7e),
+SSH sur pxl-tx 35 s après le réveil. ⚠ Piège rencontré en le faisant : `pkill -f 'tailscaled --tun=…'` a tué **le shell
+de l'outil lui-même** (code 144 = SIGTERM) — la commande qui cherche contient le motif, la leçon du battement (§2, 15/10)
+vaut aussi pour `pkill` : écrire `'[t]ailscaled --tun=…'`. Le correctif de `tunnel_assure.sh` (comparer le proxy de
+`tailscaled` au courant, ou un `tailscale ping` avant de dire « Running ») attend toujours le go d'Eliott.
+
 ---
 
 ## 3. Le réseau — un proxy qui n'est pas qu'un proxy
