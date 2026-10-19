@@ -35,6 +35,9 @@ ICI="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 U=http://127.0.0.1:8720
 M=/home/radxa/turbohq/pxl-turbohq-client/bin/mbx.js
 VIVANT=/tmp/veille-mbx.vivant
+# Heure du journal en HEURE FRANÇAISE, fuseau écrit (règle d'Eliott du 18/10 : jamais une heure nue en UTC) ; le
+# témoin de vie reste un epoch, qui n'a pas de fuseau.
+heure() { TZ=Europe/Paris date '+%H:%M:%S %Z'; }
 remonter() { TS_DIR="$ICI/.tailscale" timeout 120 bash "$ICI/tunnel_up.sh" 8710 >/dev/null 2>&1; }
 
 # La boucle de la carte : arguments = relais, mbx.js, boîte, secondes restantes.
@@ -79,7 +82,7 @@ while [ "$(date +%s)" -lt $fin ]; do
       *) case $l in
            "TIC ?") ;;                                                 # relais muet ce tour-ci : la session vit
            TIC*) date -u +%s > "$VIVANT"; echecs=0 ;;
-           COURRIER*) echo "$(date -u +%H:%M:%S) [veille] ${l#COURRIER } message(s) pour $BOITE :"; etat=courrier ;;
+           COURRIER*) echo "$(heure) [veille] ${l#COURRIER } message(s) pour $BOITE :"; etat=courrier ;;
            FIN-FENETRE) etat=fini ;;
          esac ;;
     esac
@@ -89,8 +92,8 @@ while [ "$(date +%s)" -lt $fin ]; do
   [ $etat = fini ] && break
   echecs=$((echecs + 1))                                                # session tombée avant la fin de la fenêtre
   [ $echecs = 3 ] && remonter                                           # tunnel tombé : on le relève
-  [ $echecs = 10 ] && echo "$(date -u +%H:%M:%S) [veille] pxl-tx injoignable depuis ~10 essais"
+  [ $echecs = 10 ] && echo "$(heure) [veille] pxl-tx injoignable depuis ~10 essais"
   sleep 20
 done
 rm -f "$VIVANT"
-echo "$(date -u +%H:%M:%S) [veille] fin de fenêtre, rien reçu"
+echo "$(heure) [veille] fin de fenêtre, rien reçu"
