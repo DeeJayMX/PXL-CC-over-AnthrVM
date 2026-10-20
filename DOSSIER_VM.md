@@ -287,6 +287,19 @@ reboots et un sans en 36 h ; la nuit du 19 au 20 en a coûté trois aux VM des a
 manqués) — d'où la règle née cette nuit-là côté PXL-TurboHQ : **ce qui doit partir à une heure est une unité minutée sur
 la machine cible, jamais une VM** (UTHQ_GENLOCK.md, phase 2).
 
+**Ajout, 20/10 18h36 (heure française ; 16:36 UTC) — un DOUZIÈME redémarrage, SANS reboot (même `btime` 03:36:50 UTC,
+uptime 777 min, `boot_id` d49ac614 inchangé), 13 h après le onzième.** Le harnais a annoncé « The container was restarted »
+à ~18h33 CEST et a perdu la tâche de fond de la veille (dernier battement 18:33:01 CEST — LU avant le réarmement, cette
+fois). Disque gardé (canari présent, `/etc/localtime` Paris, dépôts intacts à 1368f76). **Port du proxy 45337 → 42571.**
+`tailscaled` (pid 1420, né au boot) VIVANT mais PÉRIMÉ — l'espèce du 6e, du 7e et du 10e, reproduite : son environnement
+portait encore `HTTPS_PROXY=…:45337`, `tunnel_assure.sh` répondait « Running », `tailscale status` montrait TOUS les pairs
+hors ligne, `tailscale ping pxl-tx` « timed out », `tx_ssh.py` « SOCKS refuse la connexion ». Remède, une fois : `kill 1420`
+(par pid, jamais `pkill -f` — le piège du 10e), puis `tunnel_assure.sh` ⇒ `tailscaled` neuf (pid 28608, proxy 42571), pong
+de pxl-tx via DERP(par) en 113 ms, lecture MBX à **18h35:32**, soit ~2 min 30 après le réveil ; boîte turbohq à 0 en
+attente (rien manqué : le dernier courrier datait de 15h46). Le correctif de `tunnel_assure.sh` (comparer le port du proxy
+de `tailscaled` au courant, ou un `tailscale ping` avant de dire « Running ») attend toujours le go d'Eliott — quatre
+occurrences maintenant.
+
 ---
 
 ## 3. Le réseau — un proxy qui n'est pas qu'un proxy
