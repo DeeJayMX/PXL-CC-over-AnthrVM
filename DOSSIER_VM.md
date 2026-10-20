@@ -278,8 +278,8 @@ vaut aussi pour `pkill` : écrire `'[t]ailscaled --tun=…'`. Le correctif de `t
 `tailscaled` au courant, ou un `tailscale ping` avant de dire « Running ») attend toujours le go d'Eliott.
 
 **Ajout, 20/10 05h38 (heure française ; 03:38 UTC) — un ONZIÈME redémarrage, VRAI reboot, 12 h 47 après le dixième (et
-3 h 44 après le dernier courrier de la nuit).** Dernier battement de la veille 05:38:16 CEST (le fichier a survécu au
-redémarrage, comme tout le disque) ; `btime` = **03:36:50 UTC** (05:36:50 CEST), uptime 1 min au réveil. Même espèce
+3 h 44 après le dernier courrier de la nuit).** Dernier battement de la veille d'avant : NON LU — la veille réarmée l'a
+écrasé (05:38:16 CEST, la neuve) avant que je le relève ; leçon : lire le battement AVANT de réarmer. `btime` = **03:36:50 UTC** (05:36:50 CEST), uptime 1 min au réveil. Même espèce
 que les 8e et 9e : disque gardé (canari du 18/10 15:13 UTC, `/etc/localtime` Paris, dépôts à jour, la note de la nuit
 comprise), processus morts (la tâche de fond de la veille, `tailscaled`), **port du proxy 39581 → 45337**. La veille
 réarmée a appelé `tunnel_assure.sh` elle-même : `tailscaled` neuf (pid 1420) une minute après le boot. Trois vrais
