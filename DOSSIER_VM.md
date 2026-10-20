@@ -725,6 +725,20 @@ réécrire :
 
 ---
 
+**Erratum, 20/10 18h40 (heure française) — une branche `master` créée PAR ACCIDENT sur ce dépôt (53d09b1, le commit du
+douzième redémarrage), et un fichier égaré.** Mécanisme (mesuré) : trois appels Bash lancés EN PARALLÈLE, chacun commençant
+par son propre `cd` (`cd …/PXL-CC-over-AnthrVM && …` pour le dossier, `cd …/PXL-TurboHQ && cat >> NOTE… && git fetch origin
+master && … && git push origin HEAD:claude/… HEAD:master` pour la note). Le troisième a tourné dans le répertoire du
+deuxième : `NOTE_SESSION_2026-09-12.md` créé ici (non suivi, supprimé), puis le `push … HEAD:master` a créé `master` sur
+PXL-CC-over-AnthrVM (dont la branche par défaut est `main`). Le harnais annonce « Primary working directory: X (was Y) »
+après chaque commande qui commence par `cd` : il gère LUI-MÊME le répertoire courant à partir de ce `cd` initial, et en
+parallèle les trois `cd` se sont croisés (supposé : le mécanisme exact n'est pas lu). Le message « fatal: couldn't find
+remote ref master » est apparu ET le push a eu lieu : l'ordre réel des commandes dans la chaîne `&&` n'est pas celui
+écrit — une raison de plus de ne pas enchaîner. **Règles** : jamais de `cd` en tête d'une commande quand plusieurs
+appels partent ensemble ; `git -C <dépôt>` et des chemins absolus partout ; un `push` vers une branche partagée
+(`master`) jamais dans un appel lancé en parallèle d'un autre. Suppression de `master` ici : hors d'atteinte depuis la
+VM (403, §4) — à Eliott.
+
 ## 9. Sources
 
 **Mesures** — `probes/vm_survey.sh` (01/08) · `probes/webgpu_probe.mjs`, `probes/vram_probe.mjs`
