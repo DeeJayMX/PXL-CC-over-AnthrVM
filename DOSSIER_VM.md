@@ -300,6 +300,17 @@ attente (rien manqué : le dernier courrier datait de 15h46). Le correctif de `t
 de `tailscaled` au courant, ou un `tailscale ping` avant de dire « Running ») attend toujours le go d'Eliott — quatre
 occurrences maintenant.
 
+**Ajout, 21/10 07h18 (heure française ; 05:18 UTC) — un TREIZIÈME redémarrage, VRAI reboot (`btime` 05:16:43 UTC = 07h16:43 CEST,
+`boot_id` 3a5fb42d neuf, uptime < 1 min au réveil), 12 h 43 après le douzième.** Le harnais a annoncé « The container was restarted »
+et la perte de la tâche de fond de la veille. Dernier battement d'avant : NON LU — réarmé avant de le relever, la leçon du 11e n'a
+pas tenu une deuxième fois ; ce qu'on sait quand même : la tâche horaire de 07h10:56 CEST l'avait trouvé « vivante » (< 3 min), donc la
+veille battait jusqu'à ~07h10 au moins, et la boîte turbohq était à **0 en attente** au réveil : rien manqué (dernier courrier à
+02h56). Même espèce que les 8e, 9e et 11e : disque gardé (canari du 20/10 16:33 UTC présent, `/etc/localtime` Paris, dépôts intacts à
+0d2da7b et 8741ee2), processus morts. **Port du proxy 42571 → 44309.** Cette fois `tailscaled` était déjà NEUF au réveil (pid 322, né
+au boot — pas de périmé à tuer), `tunnel_assure.sh` « Running » et vrai : lecture de la file MBX de pxl-tx à ~07h18, ~1 min 30 après le
+réveil. Deux vrais reboots en 25 h 40 (05h36 et 07h16, deux matins de suite vers la même heure : à surveiller — un cycle d'hôte ?).
+Le silicium : Intel Xeon @ 2,10 GHz, 4 cœurs (relevé au réveil).
+
 ---
 
 ## 3. Le réseau — un proxy qui n'est pas qu'un proxy
