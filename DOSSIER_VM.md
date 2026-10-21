@@ -311,6 +311,18 @@ au boot — pas de périmé à tuer), `tunnel_assure.sh` « Running » et vrai :
 réveil. Deux vrais reboots en 25 h 40 (05h36 et 07h16, deux matins de suite vers la même heure : à surveiller — un cycle d'hôte ?).
 Le silicium : Intel Xeon @ 2,10 GHz, 4 cœurs (relevé au réveil).
 
+**Ajout, 21/10 20h14 (heure française ; 18:14 UTC) — un QUATORZIÈME redémarrage, SANS reboot (même `btime` 05:16:43 UTC, `boot_id`
+3a5fb42d inchangé), 12 h 56 après le treizième.** Le harnais a annoncé « The container was restarted » vers 20h13 CEST et a perdu la tâche
+de fond de la veille. Dernier battement d'avant : **20:12:55 CEST, LU avant le réarmement** (la leçon du 11e, tenue cette fois). Boîte
+turbohq à 0 en attente au réveil : rien manqué (dernier courrier à 20h04). Disque gardé (canari du matin présent, dépôts intacts à
+9b8052b). **Port du proxy 44309 → 46257.** `tailscaled` (pid 322, né au boot du matin) VIVANT mais PÉRIMÉ — l'espèce du 6e, du 7e, du
+10e et du 12e, reproduite une cinquième fois : `tunnel_assure.sh` répondait « Running », `tx_ssh.py` « SOCKS refuse la connexion ».
+Remède, une fois : `kill 322` (par pid), puis `tunnel_assure.sh` ⇒ `tailscaled` neuf (pid 25568), lecture de la file MBX à 20h13:50, soit
+~1 min après le réveil. Deux redémarrages dans la journée (07h16 vrai reboot, 20h13 sans) : un cycle d'environ 12 h 45 depuis le 20/10
+05h36 (05h36 → 18h33 → 07h16 → 20h13 : 12 h 57, 12 h 43, 12 h 57). Le correctif de `tunnel_assure.sh` (comparer le port du proxy de
+`tailscaled` au courant, ou un `tailscale ping` avant de dire « Running ») attend toujours le go d'Eliott — cinq fois le même geste à
+la main.
+
 ---
 
 ## 3. Le réseau — un proxy qui n'est pas qu'un proxy
