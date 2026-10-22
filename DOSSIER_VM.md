@@ -323,6 +323,18 @@ Remède, une fois : `kill 322` (par pid), puis `tunnel_assure.sh` ⇒ `tailscale
 `tailscaled` au courant, ou un `tailscale ping` avant de dire « Running ») attend toujours le go d'Eliott — cinq fois le même geste à
 la main.
 
+**Ajout, 22/10 06h40 (heure française ; 04:40 UTC) — un QUINZIÈME redémarrage, VRAI reboot, 10 h 16 après le quatorzième.** `btime`
+1792643369 = 04:29:29 UTC (06h29:29), `boot_id` `f3f071fe`, port du proxy 46257 → 37939, `tailscaled` absent (pas périmé : inexistant),
+workdir et les deux dépôts gardés (canari présent). Ordre tenu : battement de la veille MBX lu AVANT le réarmement (dernier 06:29:24,
+soit 5 s avant le reboot — rien de perdu entre les deux), `tunnel_assure.sh` (le correctif c1fbaa1 — sonde TCP du SOCKS 1055 — n'a pas
+eu à servir : aucun démon à tuer), boîte MBX vide à 06h30:46, veille réarmée à 06h31 ; le relais 8720 comptait encore UN veilleur pour
+`turbohq` alors que le mien était mort avec le conteneur — un SSE coupé net n'est pas détecté avant son prochain battement côté relais
+(fantôme, à compter dans les lectures de `/api/turbohq/mbx` : « 1 » ne prouve pas une veille vivante). Le rapport ⑤ de TurboNode (06h30)
+est arrivé APRÈS le réarmement : le fantôme ne l'a pas consommé. Cycle : 07h16 → 20h13 → 06h29 = 12 h 57, 10 h 16 — le quinzième est
+plus court que les quatre précédents (12 h 43-12 h 57) ; un reboot un nuit de carte blanche, pendant une boucle de mesures à trois
+sessions : aucune mesure perdue parce que rien ne tourne dans cette VM (les enregistreurs sont sur pxl-tx et la box), seulement la
+veille, réarmée en 1 min 30.
+
 ---
 
 ## 3. Le réseau — un proxy qui n'est pas qu'un proxy
