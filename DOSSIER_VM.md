@@ -347,6 +347,16 @@ une aussi (SSE + battement) et sont tombées — donc la veille de fond ne prot�
 sur la machine cible protège un geste. À confirmer sur d'autres occurrences (heures des chutes des sœurs : 00h47, 02h36, 04h12,
 05h07, 06h45, 09h16 — aucune sur un multiple de 12 h 45).
 
+**Ajout, 22/10 09h46 (heure française ; 07:46 UTC) — deuxième occurrence en 30 min, même VM sœur.** La VM de TurboNode, revenue à
+09h16:29, n'a fait qu'un tour (09h17) puis s'est tue ; recyclée de nouveau entre ~09h24 et 09h43 (tunnel remonté 09h43:37). Donc
+~25 min de repos ⇒ recyclage, deux fois de suite, avec une veille SSE + battement en tâche de fond à chaque fois. La mienne, qui a
+fait un tour toutes les 5-20 min depuis 06h31, tient toujours (battement continu). L'hypothèse « recyclage par inactivité ~25-30 min,
+la veille de fond ne compte pas comme activité » gagne une occurrence ; il en faudrait une sur MA VM pour la tenir pour acquise
+(prochaine fenêtre : si Eliott ne répond pas d'ici ~10h15 et que je ne fais aucun tour, ma VM devrait tomber vers 10h20-10h25 — à
+lire à l'heure du battement si elle tombe). Nuance : la tâche de fond est « suivie » par l'outil (run_in_background), ce qui
+devrait maintenir la VM selon le § 4 de ce dossier ; or les sœurs utilisent le même mécanisme. Soit le maintien par tâche suivie ne
+vaut que pendant un tour en cours, soit il a une durée maximale (~25 min ?) — le § 4 est à relire avec ce fait, sans l'écraser.
+
 ---
 
 ## 3. Le réseau — un proxy qui n'est pas qu'un proxy
