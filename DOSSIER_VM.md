@@ -335,6 +335,18 @@ plus court que les quatre précédents (12 h 43-12 h 57) ; un reboot un nuit de 
 sessions : aucune mesure perdue parce que rien ne tourne dans cette VM (les enregistreurs sont sur pxl-tx et la box), seulement la
 veille, réarmée en 1 min 30.
 
+**Ajout, 22/10 09h20 (heure française ; 07:20 UTC) — deux VM SŒURS recyclées à 20 s d'écart, la mienne épargnée.** Les sessions
+TurboNode et PXL-Switcher (même compte, autres dépôts) ont perdu leur conteneur en même temps : dernière activité 08h49 pour les
+deux, retour 09h16:29 et 09h16:47. La mienne, active sans interruption (battement de veille continu, commits jusqu'à 09h18), n'a pas
+bougé. Deux lectures compatibles : un recyclage par INACTIVITÉ (~27 min après le dernier tour — les deux sessions s'étaient tues
+ensemble à la fin de la nuit, la mienne non), ou une coupure côté plateforme qui n'a touché que des conteneurs au repos. Dans les
+deux cas c'est un fait nouveau pour ce dossier : **le recyclage ne suit pas seulement un cycle horaire par VM (~12 h 45), il frappe
+aussi une VM au repos après ~25-30 min sans tour**, et une VM qui travaille y échappe. Conséquence pratique (déjà la règle) : rien
+ne vit dans une VM entre deux tours ; une veille en tâche de fond suivie compte comme activité ici, mais les deux sœurs en avaient
+une aussi (SSE + battement) et sont tombées — donc la veille de fond ne protège PAS du recyclage par inactivité ; seule une unité
+sur la machine cible protège un geste. À confirmer sur d'autres occurrences (heures des chutes des sœurs : 00h47, 02h36, 04h12,
+05h07, 06h45, 09h16 — aucune sur un multiple de 12 h 45).
+
 ---
 
 ## 3. Le réseau — un proxy qui n'est pas qu'un proxy
