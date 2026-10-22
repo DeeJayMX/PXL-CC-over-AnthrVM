@@ -359,6 +359,17 @@ vaut que pendant un tour en cours, soit il a une durée maximale (~25 min ?) —
 
 ---
 
+**Ajout, 22/10 19h44 (heure française ; 17:44 UTC) — un SEIZIÈME redémarrage, VRAI reboot, 13 h 12 après le quinzième, pendant une
+PAUSE DE CRÉDIT.** `btime` 17:41:46 UTC (19h41:46), `boot_id` `f3f071fe` → `7249cd71`, port du proxy 37939 → 34241, `tailscaled`
+absent au réveil (relancé par `tunnel_assure.sh`, SOCKS 1055 accepté), workdir et les deux dépôts gardés (canari présent, PXL-TurboHQ à
+ba2fe6f, arbre propre). Le fait nouveau : la coupure n'a pas été un recyclage silencieux — **Eliott a écrit « Réessayez » puis « j'ai
+remis une pièce, on continue »** : la session était à court de crédit, et le conteneur a été rendu pendant l'arrêt. Dernier battement
+de la veille MBX 19h25:44, reboot 19h41:46 : ~16 min sans veille (le relais 8720 a gardé les messages : boîte VIDE à 19h43, rien n'était
+arrivé). Ordre tenu : battement lu avant le réarmement, tunnel, lecture de la boîte, veille réarmée à 19h44. Cycle : 07h16 → 20h13 →
+06h29 → 19h41 = 12 h 57, 10 h 16, 13 h 12. ⚠ À séparer désormais dans ce dossier : un reboot au cycle (~12 h 45), un recyclage au
+repos (~25-30 min), et une PAUSE DE CRÉDIT (le conteneur rendu dès l'arrêt, repris à la relance par l'utilisateur) — le troisième se
+reconnaît à ce que la session elle-même s'est tue avant la VM, et il ne tombe pas sur le cycle.
+
 ## 3. Le réseau — un proxy qui n'est pas qu'un proxy
 
 Tout l'egress passe par `HTTPS_PROXY` (**port aléatoire par session** : 42041 le 01/08).
