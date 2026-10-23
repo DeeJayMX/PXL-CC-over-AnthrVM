@@ -69,6 +69,9 @@ Détaillé dans `DOSSIER_VM.md` §4 et §7 — les pièges qui coûtent le plus 
   `playwright install`.
 - **ARM** : `clang --target=aarch64-linux-gnu` compile sans cross-toolchain, mais il n'y a pas de
   `qemu-user` ⇒ **rien d'ARM ne peut être exécuté**. La correction se prouve, l'exactitude non.
+  ⭐ **Ajout 23/10 (mesuré)** : `apt-get install -y gcc-aarch64-linux-gnu qemu-user` passe, et le code ARM s'exécute
+  sous `qemu-aarch64 -L /usr/aarch64-linux-gnu`. L'exactitude se prouve donc aussi ; la vitesse, jamais sous qemu
+  (DOSSIER_VM §7).
 - **Aucune mesure de perf n'est comparable entre deux sessions** — le CPU change. Seuls les
   rapports le sont, avec référence réintercalée dans la même VM.
 
