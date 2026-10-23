@@ -370,6 +370,14 @@ arrivé). Ordre tenu : battement lu avant le réarmement, tunnel, lecture de la 
 repos (~25-30 min), et une PAUSE DE CRÉDIT (le conteneur rendu dès l'arrêt, repris à la relance par l'utilisateur) — le troisième se
 reconnaît à ce que la session elle-même s'est tue avant la VM, et il ne tombe pas sur le cycle.
 
+**Ajout, 23/10 05h38 (heure française ; 03:38 UTC) — un DIX-SEPTIÈME redémarrage, VRAI reboot, 9 h 54 après le seizième, la nuit, au
+repos.** `btime` 03:36:16 UTC (05h36:16), `boot_id` `7249cd71` → `26e45bfd`, port du proxy 34241 → 33209, `tailscaled` absent (relancé par
+`tunnel_assure.sh`), workdir et dépôts gardés (canari présent, PXL-TurboHQ à fe2246a, arbre propre). Dernier battement de la veille MBX
+05h36:08, soit 8 s avant le reboot ; boîte MBX VIDE au réveil ; veille réarmée à 05h37. Aucune pause de crédit (Eliott dormait) ni
+activité de session depuis 03h09 (dernier tour : le contrôle horaire) : ~2 h 27 au repos, donc ni le « recyclage au repos » de
+~25-30 min (la veille de fond a tenu 2 h 27), ni le cycle (07h16 → 20h13 → 06h29 → 19h41 → 05h36 : 12 h 57, 10 h 16, 13 h 12, 9 h 54).
+Rien de perdu : la mesure de la nuit tourne sur la box et pxl-tx (unités systemd), pas ici.
+
 ## 3. Le réseau — un proxy qui n'est pas qu'un proxy
 
 Tout l'egress passe par `HTTPS_PROXY` (**port aléatoire par session** : 42041 le 01/08).
