@@ -572,6 +572,8 @@ réécrire :
   Windows à l'aveugle. Ce qui touche le GPU reste pour le PC.
 - **Supposé, non mesuré :** `qemu-user` s'installerait de la même façon. Cela toucherait la ligne « Exécuter du code
   ARM » du §7.
+- **Ajout, 23/10 ~10h00 (heure française) — mesuré :** il s'installe (`apt-get install -y gcc-aarch64-linux-gnu
+  qemu-user`), et le code ARM s'exécute sous `qemu-aarch64 -L /usr/aarch64-linux-gnu`. Voir la note du §7.
 - **Ajout, 17/10 09:40 UTC — la méthode est versée au dépôt PXL-TurboHQ :** `pxl-virtual-decklink/wine/banc_wine.sh`.
   Une commande installe les outils, compile l'arbre de travail ET la référence (HEAD), pose le faux DeckLinkAPI dans
   le préfixe, lance les deux bancs et compare leurs échecs. Contre-épreuve : une faute injectée ressort seule, avec le
@@ -698,6 +700,16 @@ réécrire :
 > ⚠️ **17/10/2026 — réserve sur la ligne ARM ci-dessus (non mesurée).** `apt-get install` passe désormais par le
 > proxy (mingw-w64 et Wine installés et exécutés ce jour-là, §5). `qemu-user` est donc probablement installable lui
 > aussi : à mesurer avant de recopier « définitivement ».
+
+> ⭐ **23/10/2026 ~10h00 (heure française) — MESURÉ : la ligne ARM ci-dessus est fausse dans cette session.** Les paquets
+> `gcc-aarch64-linux-gnu` et `qemu-user` s'installent par `apt-get install -y` en moins de 4 min (qemu-aarch64 8.2.2,
+> gcc 13.2). Un binaire aarch64 (`-mcpu=cortex-a55`) **s'exécute** sous `qemu-aarch64 -L /usr/aarch64-linux-gnu`.
+> Le cas : le récepteur uthq en C (PXL-TurboHQ, `pxl-turbohq-client/natif/`). Ses 30 scénarios de vecteurs rendent le
+> même texte qu'en x86-64, et son banc UDP bout à bout passe, binaire ARM compris. `clang --target=aarch64-linux-gnu`
+> seul ne suffit PAS : sans les en-têtes de la glibc aarch64, `bits/libc-header-start.h` est introuvable. Ce sont les
+> paquets `-cross` qui les apportent. **Règle :** la justesse d'un code ARM se prouve désormais ici. La vitesse, non :
+> qemu émule, et un temps mesuré sous qemu ne dit rien de l'A55. Le tableau ci-dessus n'est pas réécrit (règle du
+> dossier) : ce fait s'y ajoute.
 
 ---
 
