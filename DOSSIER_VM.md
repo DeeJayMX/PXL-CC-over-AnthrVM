@@ -378,6 +378,18 @@ activité de session depuis 03h09 (dernier tour : le contrôle horaire) : ~2 h 2
 ~25-30 min (la veille de fond a tenu 2 h 27), ni le cycle (07h16 → 20h13 → 06h29 → 19h41 → 05h36 : 12 h 57, 10 h 16, 13 h 12, 9 h 54).
 Rien de perdu : la mesure de la nuit tourne sur la box et pxl-tx (unités systemd), pas ici.
 
+**Ajout, 23/10 18h33 (heure française ; 16:33 UTC) — un DIX-HUITIÈME redémarrage, SANS reboot, 12 h 57 après le dix-septième,
+EN PLEINE activité, et une variante que le test du 22/10 ne voyait pas.** `btime` inchangé (03:36:15 UTC), uptime 13 h ; la veille
+MBX, tâche suivie, arrêtée (le harnais le dit) ; workdir gardé (PXL-TurboHQ à f1f4209, arbre propre). **Port du proxy 33209 → 36091**,
+`tailscaled` (PID 328, celui du réveil de 05h36) vivant sur l'ANCIEN (`/proc/328/environ`). 🟡 **La variante** : `tunnel_assure.sh`
+répondait « Running » ET « SOCKS 1055 : accepte » — le connect local passait, c'est la demande SOCKS vers pxl-tx qui échouait
+(`tx_ssh.py` : « SOCKS refuse la connexion ») ; `Self.Online` false, tous les pairs hors ligne, le journal plein de DERP
+« dial tcp 127.0.0.1:33209: connection refused ». Le test du 22/10 (un connect sur 1055) ne le voyait donc pas. Remède : `kill 328`,
+`tunnel_assure.sh`, en ligne aussitôt, boîte MBX VIDE (18h35:53), veille réarmée. ⇒ `tunnel_assure.sh` compare désormais le
+`HTTPS_PROXY` du `tailscaled` vivant au sien et relance s'ils diffèrent, et imprime `Self.Online` (« tailnet : en ligne / HORS
+LIGNE ») : « Running » ne dit pas « joignable ». C'est l'espèce des 6e, 7e et 10e (« les processus survivent, le port change »),
+reconnue cette fois par sa CAUSE plutôt que par un symptôme qui ne se montre pas toujours.
+
 ## 3. Le réseau — un proxy qui n'est pas qu'un proxy
 
 Tout l'egress passe par `HTTPS_PROXY` (**port aléatoire par session** : 42041 le 01/08).
