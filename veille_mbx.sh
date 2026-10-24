@@ -46,16 +46,18 @@ remonter() { TS_DIR="$ICI/.tailscale" timeout 120 bash "$ICI/tunnel_up.sh" 8710 
 # les 15 s), PUIS on lit l'annuaire 0,5 s après — un message tombé entre les deux est vu par l'un ou par l'autre, jamais
 # par aucun. Le flux ne VIDE rien (le `read` seul vide). Une ligne « TIC » par ligne non vide du flux (≤ 15 s) : le
 # témoin de vie local suit. Flux muet 50 s, ou fini (10 min au plus) : on se réabonne, dans la MÊME session SSH.
-BOUCLE_CARTE='U=$1; M=$2; B=$3; fin=$(( $(date +%s) + $4 ))
+BOUCLE_CARTE='U=$1; M=$2; B=$3; fin=$(( $(date +%s) + $4 )); premier=1
 courrier() { echo "COURRIER $1"; MBX_URL=$U timeout 15 node "$M" --as "$B" read 2>&1; echo "FIN-COURRIER"; exit 0; }
 while :; do
   r=$(( fin - $(date +%s) )); [ "$r" -gt 600 ] && r=600; [ "$r" -lt 5 ] && break
   exec 3< <(curl -sN -m "$r" --speed-time 45 --speed-limit 1 "$U/api/turbohq/mbx/$B/stream" 2>/dev/null; echo FLUX-FIN)
   p=$!; sleep 0.5
-  n=$(curl -s -m 5 "$U/api/turbohq/mbx" | python3 -I -c "
+  # 24/10 : l annuaire MBX coûte 8-25 ms au relais, qui porte aussi le PGM (DOSSIER_RGA § 259.65) — relevé au PREMIER
+  # abonnement de la session seulement ; ensuite le flux SSE suffit (il pousse chaque message à l instant).
+  n=; if [ $premier = 1 ]; then premier=0; n=$(curl -s -m 5 "$U/api/turbohq/mbx" | python3 -I -c "
 import sys, json
 try: print(next((b.get(\"queued\", 0) for b in json.load(sys.stdin) if b.get(\"name\") == sys.argv[1]), 0))
-except Exception: pass" "$B")
+except Exception: pass" "$B"); else n=0; fi
   echo "TIC ${n:-?}"
   if [ -n "$n" ] && [ "$n" -gt 0 ]; then pkill -P "$p" curl; courrier "$n"; fi
   while IFS= read -r -t 50 -u 3 l; do
