@@ -390,6 +390,25 @@ répondait « Running » ET « SOCKS 1055 : accepte » — le connect local pass
 LIGNE ») : « Running » ne dit pas « joignable ». C'est l'espèce des 6e, 7e et 10e (« les processus survivent, le port change »),
 reconnue cette fois par sa CAUSE plutôt que par un symptôme qui ne se montre pas toujours.
 
+**Ajout, 26/10 18h00 (heure française ; 16:00 UTC) — trois retours de conteneur notés après coup, dont un VRAI reboot mesuré
+à chaud.** (Session TurboHQ ; les deux premiers n'ont pas été relevés sur le moment, ce qui suit dit ce qui l'a été et ce qui ne
+l'a pas été.)
+- **24/10 vers 09h43** (le dix-neuvième, compté sans preuve de reboot) : la session reprend après ~6 h d'arrêt voulu (Eliott
+  avait coupé les sessions pour le coût). Au premier `tunnel_assure.sh` : « tailnet : HORS LIGNE (le nœud ne joint pas DERP) », et
+  `tx_ssh.py` : « SOCKS refuse la connexion ». Au second, une minute plus tard : « en ligne », et tout passe. `btime` **non relevé**,
+  donc on ne sait pas si c'était un reboot. Workdir gardé (dépôts présents, arbres propres).
+- **26/10 vers 17h49** (le vingtième, même réserve) : reprise après ~2 jours d'arrêt, exactement le même tableau (HORS LIGNE au
+  premier passage, en ligne au second).
+- **26/10 17h58:32 — le VINGT ET UNIÈME, VRAI reboot, MESURÉ** : `btime` 1793033912 (17h58:32 CEST), `boot_id`
+  29e92738-…, uptime 1 min à 17h59:46, en plein tour de session. **Port du proxy → 37803**, **aucun `tailscaled`** après le
+  reboot. Workdir gardé : PXL-TurboHQ à 6124428, PXL-CC-over-AnthrVM à 7b0a221, arbres propres. Rien de perdu : tout était poussé
+  avant.
+- 🟡 **Une leçon d'outil** (supposée sur deux cas, pas prouvée) : `tunnel_assure.sh` lit `Self.Online` trop tôt après avoir
+  relancé `tailscaled`. Le nœud n'a pas encore joint DERP, d'où un « HORS LIGNE » qui se corrige seul quelques secondes plus tard.
+  Remède à poser plus tard : attendre `Self.Online` (≤ 20 s) avant de conclure. En attendant : un « HORS LIGNE » juste après une
+  relance se relit une fois avant d'y croire.
+- Compte : 21 retours de conteneur relevés depuis le début du dossier, dont au moins 10 vrais reboots mesurés par `btime`.
+
 ## 3. Le réseau — un proxy qui n'est pas qu'un proxy
 
 Tout l'egress passe par `HTTPS_PROXY` (**port aléatoire par session** : 42041 le 01/08).
