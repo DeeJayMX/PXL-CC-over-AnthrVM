@@ -717,6 +717,29 @@ réécrire :
 
 ---
 
+## 6 bis. Le COÛT d'une session : le cache de contexte (26/10/2026, constat d'Eliott)
+
+> Eliott, 26/10 : « on a fait une connerie sur les VMs Anthropic, le prompt caching, cache de contexte de 5 min. Pas
+> compatible avec nos tests de 15 minutes. » Il avait écrit le 24/10 : « J'ai envoyé 400 euros ce mois-ci, et tous les 3
+> vous avez bouffé 100 $ en 3 h ».
+
+- **Lu** (documentation des outils de la session, pas mesuré) : le contexte d'une session est mis en cache 1 h. Quand le
+  compte passe en **dépassement d'usage**, le cache tombe à **5 min**. Au-delà, chaque réveil relit TOUT le contexte au plein
+  tarif, au lieu de ~10 % pour un contexte en cache.
+- **Ce qui l'a rendu cher** (calcul, sur notre façon de travailler du 23 au 24/10) :
+  - trois sessions aux contextes énormes (des centaines de tours, plus un résumé) ;
+  - réveillées toutes les 10 à 30 min : une fenêtre de mesure de 15 min, un MBX, une veille réarmée, une tâche horaire ;
+  - chaque message MBX réveille les DEUX autres sessions.
+  C'est le pire cas possible avec un cache de 5 min : presque chaque réveil est un contexte froid.
+- **Les leviers**, dans l'ordre :
+  1. MOINS de réveils : pas de veille ni de tâche horaire quand rien n'attend une réponse ; un seul message de synthèse au
+     lieu d'un échange (fait le 24/10 et le 26/10) ;
+  2. des contextes COURTS : un chantier neuf (le multicast par exemple) part dans une session neuve, avec un brief compact
+     (NOTE de session, plan écrit), plutôt que dans une session de plusieurs jours ;
+  3. la surveillance et les attentes confiées à un script (unité minutée, rapport écrit dans un fichier), relu une seule fois
+     à la fin, plutôt qu'une session qui attend en se réveillant ;
+  4. un modèle plus léger pour les tâches de veille, si elles restent nécessaires.
+
 ## 7. Ce qui est hors d'atteinte, définitivement
 
 | | Pourquoi |
