@@ -6,7 +6,9 @@
 # qu'en 5 min (doc des réglages, `promptCacheTtl`). Le 1 h ne rapporte que si on revient APRÈS plus de
 # 5 min et AVANT l'heure — une séance de travail suivie. Pour une question ponctuelle ou de longues
 # absences, 5 min coûte moins.
-#   1h = mode sérieux (séance suivie, pauses de 5 à 60 min) · 5m = mode léger (défaut versionné)
+#   1h = défaut versionné · 5m = question ponctuelle suivie de longues absences.
+# ⚠️ Mesuré le même soir dans le journal de session : avec 300-800 k jetons de contexte, UNE pause de 5 à
+# 60 min en 5m réécrit tout (~$1,5-4) ; le 1h ne coûte plus cher qu'au retour après plus d'une heure.
 #
 # Ce qu'il écrit : /home/user/.claude/settings.json, le fichier que lit une session ouverte sur
 # /home/user (plusieurs dépôts — ce sont aussi ses hooks qui y vivent). ⚠️ Une session à PLUSIEURS

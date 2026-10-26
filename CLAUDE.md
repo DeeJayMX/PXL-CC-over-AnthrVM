@@ -31,8 +31,13 @@ VM neuve.
   - On **ne les réarme pas** sans nouvelle demande d'Eliott. Leur mode d'emploi est dans l'HISTORIQUE (« VEILLE MBX »).
 - **Ouvrir la session sur le SEUL dépôt utile** : chaque dépôt attaché ajoute son `CLAUDE.md` à chaque requête.
 - **Économiser le contexte** : sorties d'outils bornées, et pas de sous-agent pour une recherche courte.
-- **Cache de prompt** (`promptCacheTtl`, une écriture coûte plus cher en 1 h qu'en 5 min) : **`5m` par défaut**,
-  `bash cache.sh 1h` quand Eliott annonce une séance sérieuse, `bash cache.sh 5m` pour revenir. Le script écrit
+- **Ce qui coûte** (mesuré le 26/10 dans `/root/.claude/projects/-home-user/*.jsonl`, champ `usage` de chaque
+  réponse) : la LECTURE du contexte à chaque requête, 60-76 % de la facture. ⇒ `autoCompactWindow: 300000`
+  (versionné). ⚠️ **Jamais sous le plancher de la session** (contexte juste après une compaction), sinon elle
+  compacte en boucle.
+- **Cache de prompt** (`promptCacheTtl`) : **`1h` par défaut**. Une écriture coûte $8/M en 1 h contre $5/M en
+  5 min, mais avec 300-800 k jetons de contexte, une pause de 5 à 60 min en 5 min oblige à tout réécrire.
+  `bash cache.sh 5m` seulement pour une question ponctuelle suivie de longues absences. Le script écrit
   `/home/user/.claude/settings.json` : une session à plusieurs dépôts ne lit, dans le `.claude/settings.json` d'un
   dépôt, que les plugins. 🔴 Ne pas poser `CLAUDE_CODE_PROMPT_CACHE_TTL` dans l'environnement : il passe devant le
   réglage et bloque la bascule.
