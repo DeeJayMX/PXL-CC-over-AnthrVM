@@ -408,6 +408,10 @@ l'a pas été.)
   Remède à poser plus tard : attendre `Self.Online` (≤ 20 s) avant de conclure. En attendant : un « HORS LIGNE » juste après une
   relance se relit une fois avant d'y croire.
 - Compte : 21 retours de conteneur relevés depuis le début du dossier, dont au moins 10 vrais reboots mesurés par `btime`.
+- 🔴 **Correction, même jour, quelques minutes après** : « au moins 10 vrais reboots » est une estimation écrite sans
+  compter. Le compte relu dans ce dossier donne six entrées étiquetées « VRAI reboot » avec `btime` : les 11e, 13e, 15e, 16e,
+  17e et 21e. Pour les retours d'avant le dixième, il faut relire leurs entrées une par une. Mécanisme : un total donné
+  « de mémoire » à la fin d'une entrée mesurée, et qui en emprunte l'autorité.
 
 ## 3. Le réseau — un proxy qui n'est pas qu'un proxy
 
