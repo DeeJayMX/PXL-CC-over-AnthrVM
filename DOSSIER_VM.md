@@ -1321,6 +1321,13 @@ Trois choses apprises, et la troisième est la vraie leçon :
 
    Bascule dans nos bancs : `PXL_BROWSER=chrome node <banc>` (`webgpu_harness.mjs`).
 
+   ⭐ **Ajout du 28/10/2026 (session PXL-Switcher, vignettes des viewports)** — recette rejouée telle quelle, elle
+   passe : **Google Chrome 156.0.8078.73**. Mesuré par `VideoDecoder.isConfigSupported` dans une page sécurisée
+   (`http://127.0.0.1`) : `avc1.64102a` (H.264 High 4.2) ✅, `hvc1.1.6.L123.80` (HEVC Main 4.1) ❌ — **toujours pas de
+   HEVC sous Linux en 156**, comme en 152. Le Chromium de Playwright, lui, refuse aussi le H.264 (rien changé).
+   Bascule PXL-Switcher : `PXL_CHROMIUM=/opt/google/chrome/chrome` (`console/test/navigateur.mjs`) ; c'est ce qui a
+   rendu `manuel-vignette-player.mjs` possible — le vrai player TurboHQ décodant du vrai H.264 dans une iframe.
+
    ⚠️ **Ça ne survit pas au recyclage** — comme tout ce qui vit hors du workdir. La recette
    ci-dessus est à rejouer à chaque session qui en a besoin.
 
