@@ -769,6 +769,21 @@ réécrire :
 > qemu émule, et un temps mesuré sous qemu ne dit rien de l'A55. Le tableau ci-dessus n'est pas réécrit (règle du
 > dossier) : ce fait s'y ajoute.
 
+> 🔴 **31/10/2026 00h48 → 01h10 (heure française) — MESURÉ : le serveur de contrôle de Tailscale muet à travers le
+> proxy, tout le reste joignable.** `controlplane.tailscale.com` : le CONNECT du proxy répond 200, la poignée de main
+> TLS se fait avec le vrai certificat (Let's Encrypt YE1, aucune interception), puis **aucun octet de réponse HTTP**
+> (`/key`, en 443 comme en 80, HTTP/1.1 compris : 15-20 s puis abandon). Le journal du proxy
+> (`/__agentproxy/status`, champ `recentRelayFailures`) dit à 23:57:32 UTC : `ws_closed_mid_exchange`,
+> `tunnel closed (code 1012, server_draining) after 144s; 1814 B sent, 5034 B received` — la passerelle de sortie
+> fermait le tunnel en se vidant. Au même instant `log.tailscale.com`, `derp12.tailscale.com`, `api.github.com` et
+> `thq.pxl.re` répondent en 0,1-0,7 s. `tailscale.com` rend 403 (refus de politique, mais il ne sert pas au tunnel).
+> Sans contrôle, tailscaled reste en « NoState » : pas de tailnet, donc ni MBX ni VPS ni box. Sans effet : relance
+> du login, redémarrage de tailscaled, `ip link set eth0 down/up` (adresse et route remises dans la même commande).
+> La veille à 18h09, le même chemin répondait en moins d'une seconde. **Règle :** devant un tunnel qui ne monte
+> pas, lire `recentRelayFailures` avant de suspecter Tailscale ou sa propre configuration. Le fait que le CONNECT
+> passe ne prouve pas que l'hôte répond. ⚠️ Premier diagnostic donné à Eliott ce soir-là, faux : « la politique
+> réseau bloque Tailscale » (lu sur le 403 de `tailscale.com`, hôte qui ne sert pas au tunnel).
+
 ---
 
 ## 8. Errata
