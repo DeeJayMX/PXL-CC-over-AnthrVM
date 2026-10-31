@@ -54,10 +54,14 @@ while :; do
   p=$!; sleep 0.5
   # 24/10 : l annuaire MBX coûte 8-25 ms au relais, qui porte aussi le PGM (DOSSIER_RGA § 259.65) — relevé au PREMIER
   # abonnement de la session seulement ; ensuite le flux SSE suffit (il pousse chaque message à l instant).
-  n=; if [ $premier = 1 ]; then premier=0; n=$(curl -s -m 5 "$U/api/turbohq/mbx" | python3 -I -c "
+  # 31/10 : et plus du tout l ANNUAIRE. Mesuré (captures uthq 12h36-12h51, pxl-tx et box) : 3 trous de ~28 ms de TOUT le
+  # flux vers la box, chacun 0,60 s après l ouverture d une veille — l annuaire relu juste après un changement du
+  # journal y est RECALCULÉ (tout le journal, chaque boîte) dans le processus qui sert le PGM (turbohq, 13h03). On lit
+  # SA boîte sans drain (GET /api/turbohq/mbx/<boîte> = peek, ~0,06 ms) : même compte, rien de recalculé.
+  n=; if [ $premier = 1 ]; then premier=0; n=$(curl -s -m 5 "$U/api/turbohq/mbx/$B" | python3 -I -c "
 import sys, json
-try: print(next((b.get(\"queued\", 0) for b in json.load(sys.stdin) if b.get(\"name\") == sys.argv[1]), 0))
-except Exception: pass" "$B"); else n=0; fi
+try: d = json.load(sys.stdin); print(len(d if isinstance(d, list) else d.get(\"messages\", [])))
+except Exception: pass"); else n=0; fi
   echo "TIC ${n:-?}"
   if [ -n "$n" ] && [ "$n" -gt 0 ]; then pkill -P "$p" curl; courrier "$n"; fi
   while IFS= read -r -t 50 -u 3 l; do
