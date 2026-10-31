@@ -110,7 +110,9 @@ TS="$DIR/tailscale --socket=$DIR/ts.sock"
 if ! pgrep -f "tailscaled --tun=userspace-networking" > /dev/null 2>&1; then
   log "démarrage de tailscaled (userspace, statedir)"
   # `--tun=userspace-networking` : pas de /dev/net/tun dans le conteneur.
-  "$DIR/tailscaled" --tun=userspace-networking \
+  # 31/10 : `--socks5-server=127.0.0.1:1055` — le SOCKS que mbx-agent (PXL-MBX) et les outils de TurboHQ attendent pour
+  # joindre le tailnet SANS session SSH (le service MBX du VPS, 100.79.150.21:8721). `tailscale nc` reste pour ssh.
+  "$DIR/tailscaled" --tun=userspace-networking --socks5-server=127.0.0.1:1055 \
     --statedir="$DIR/var" --socket="$DIR/ts.sock" >> "$DIR/tailscaled.log" 2>&1 &
   for _ in $(seq 1 20); do [ -S "$DIR/ts.sock" ] && break; sleep 1; done
   [ -S "$DIR/ts.sock" ] || die "tailscaled n'a pas ouvert sa socket — voir $DIR/tailscaled.log"
