@@ -784,6 +784,17 @@ réécrire :
 > passe ne prouve pas que l'hôte répond. ⚠️ Premier diagnostic donné à Eliott ce soir-là, faux : « la politique
 > réseau bloque Tailscale » (lu sur le 403 de `tailscale.com`, hôte qui ne sert pas au tunnel).
 
+> ⭐ **31/10/2026 ~13h15 (heure française) — MESURÉ : attacher un dépôt en cours de session PASSE.** La ligne
+> « Attacher un dépôt à une session en cours » du tableau, et l'erratum 3 au § 8, sont faux dans cette session.
+> Eliott a créé `DeeJayMX/PXL-MBX` pendant la session (la création reste humaine, ligne 1 du tableau).
+> `list_repos` l'a vu tout de suite, et `add_repo` (accès `push`) l'a attaché. Le clone a pris ~1 s, et le push d'une
+> branche est passé (`04ee16a`). La même session avait déjà attaché en route PXL-Switcher, PXL-Tape, PXL-AirLink et
+> PXL-StageBox. **Règle :** avant de répondre « il faut une session neuve », essayer `list_repos` puis `add_repo`.
+> Ni le tableau ni l'erratum ne sont réécrits (règle du dossier) : ce fait s'y ajoute.
+
+> 📎 **31/10/2026 — faire entrer un nouvel agent dans le réseau PXL** (tunnel, boîte MBX, veille, règles) : la recette
+> vit dans `DeeJayMX/PXL-MBX`, `ONBOARDING.md`. Ce dossier en garde la machine (§ 2-3) ; la recette, l'usage.
+
 ---
 
 ## 8. Errata

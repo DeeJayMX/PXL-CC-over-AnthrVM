@@ -78,4 +78,5 @@ Détaillé dans `DOSSIER_VM.md` §4 et §7 — les pièges qui coûtent le plus 
 ## Documents PXL liés
 
 `PXL-StageBox/jpegxs-arm/README.md` — le banc dont la méthode (référence intercalée) est
-justifiée *a posteriori* par le §1 d'ici · `PXL-Tape` — dépôt d'origine des notes.
+justifiée *a posteriori* par le §1 d'ici · `PXL-Tape` — dépôt d'origine des notes ·
+`PXL-MBX/ONBOARDING.md` — faire entrer un nouvel agent dans le réseau PXL (tunnel, boîte MBX, veille, règles), 31/10/2026.
