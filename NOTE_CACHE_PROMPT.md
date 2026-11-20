@@ -93,3 +93,25 @@ multiple du prix normal de l'entrée :
 - Qu'un changement de durée **invalide** le cache existant : `/usage` le donne comme cause probable, la
   doc ne le liste pas parmi les actions qui invalident.
 - Rien de tout cela n'a été mesuré dans une **session cloud** (la VM de ce dossier) : seulement en local.
+
+## ⭐ Ajout du 20/11/2026, quelques minutes après : deux des points « non vérifiés » sont tranchés
+
+**Mesuré**, second `/usage` de la même session, après avoir posé `promptCacheTtl: "1h"` :
+
+| | |
+|---|---|
+| Dernière ligne | `warm (1h TTL, last activity 31s ago)` (était `5m TTL`) |
+| Échecs de cache | 16 (était 15) ; cause affichée : « cache scope or TTL changed, usage-limit state changed » |
+| Jetons réécrits | 6,4 M (était 5,9 M) : **environ 500 000 pour ce seul échec** |
+| Coût estimé | 127,87 $ (était 116,02 $) |
+
+Ce que cela tranche :
+
+- ✅ Le réglage est **honoré en usage supplémentaire** sur un abonnement.
+- ✅ Il s'applique à la **session en cours**, sans relancer Claude Code.
+- ⚠️ **Changer la durée coûte une réécriture complète** de la conversation, une fois : le cache de 5 min
+  n'est pas réutilisé par le cache d'1 h. À poser en début de session, pas au milieu d'une conversation
+  longue. (La doc ne le dit pas ; `/usage` le donne comme cause, et le compteur d'échecs a bien pris + 1.)
+
+Restent non vérifiés : le prix réel des écritures en usage supplémentaire, et le comportement en session
+cloud.
