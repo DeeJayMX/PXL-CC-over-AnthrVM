@@ -115,3 +115,44 @@ Ce que cela tranche :
 
 Restent non vérifiés : le prix réel des écritures en usage supplémentaire, et le comportement en session
 cloud.
+
+## ⭐ Ajout du 21/11/2026 : sous-agents passés à 1 h aussi (décision d'Eliott)
+
+Décision d'Eliott, 21/11/2026 : « OUI au cache prompt d'1h et pour tous, sous-agent compris ». Elle **remplace la
+recommandation** « Sous-agents laissés à 5 min » de la section « Ce qu'il faut en retenir » ci-dessus, qui reste
+écrite pour l'historique.
+
+Réglage posé le 21/11/2026 sur le même poste (Windows, Claude Code 2.1.328 d'après la variable `AI_AGENT` de la
+session), dans `~/.claude/settings.json`, à côté du réglage du 20/11 :
+
+```json
+{ "promptCacheTtl": "1h", "subagentPromptCacheTtl": "1h" }
+```
+
+**Pourquoi la recommandation du 20/11 était fausse pour nous** (raisonnement, pas mesure) : les sous-agents du
+projet L18 n'enchaînent pas leurs appels sans pause. Ils attendent régulièrement plus de 5 minutes : un test
+dans un navigateur (1 à 5 min), la file d'attente du navigateur partagé entre deux agents, une sonde. Et un
+agent repris par `SendMessage` repart avec tout son contexte : le 21/11, un agent d'étude a été relancé avec
+environ 400 000 jetons de contexte. À 5 min, chacune de ces attentes fait réécrire tout ce contexte au tarif
+d'écriture.
+
+**Documenté** (<https://code.claude.com/docs/en/prompt-caching.md>, relu à la main le 21/11/2026) :
+
+- Les sous-agents, les workflows, les forks, la compaction et les titres de session sont dans le groupe
+  « everything else » : **5 min par défaut, même sur un abonnement dans le forfait**, tant que
+  `subagentPromptCacheTtl` (ou `CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL`) n'est pas posé.
+- Un sous-agent ne lit pas le cache de la session parente (préfixe différent) ; un fork, si. Un sous-agent
+  repris peut relire le cache qu'il avait chauffé, s'il n'a pas expiré.
+- **Changer de modèle** (`/model`) invalide tout le cache de la conversation : chaque modèle a le sien. Constaté
+  le 21/11 : passage de Fable 5.2 à Opus 5.5 au milieu d'une session longue, donc une relecture complète sans
+  cache à la réponse suivante (non mesuré dans `/usage`).
+- Sur Opus 5.5 et Fable 5.1 et suivants, avec un abonnement, changer l'effort ne casse plus le cache.
+
+**Non vérifié** :
+
+- Si un sous-agent **déjà en cours** au moment du réglage passe à 1 h, ou seulement les suivants. La doc dit que
+  la plupart des réglages sont relus à chaud, sans le dire pour celui-ci.
+- `/usage` ne montre que la conversation principale (« Prompt cache (main) ») : il ne dit pas la durée du
+  cache des sous-agents. Contrôle possible : le champ `usage.cache_creation` (`ephemeral_1h_input_tokens`)
+  dans le transcript JSONL d'un sous-agent.
+- Le gain réel : à mesurer sur la facture d'un jour de travail par agents, avant et après.

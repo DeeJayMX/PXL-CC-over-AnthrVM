@@ -35,7 +35,7 @@ né sur une branche de `pxl-airlink`.
 | | |
 |---|---|
 | [`DOSSIER_VM.md`](DOSSIER_VM.md) | **Le dossier.** Machine, cycle de vie, réseau/proxy, GitHub, outillage, navigateur, errata. Point d'entrée. |
-| [`NOTE_CACHE_PROMPT.md`](NOTE_CACHE_PROMPT.md) | **Cache de prompt** (20/11/2026, poste local) : il passe seul de 1 h à 5 min hors forfait ; le réglage `promptCacheTtl`, les prix, ce qui reste à vérifier. |
+| [`NOTE_CACHE_PROMPT.md`](NOTE_CACHE_PROMPT.md) | **Cache de prompt** (20 et 21/11/2026, poste local) : il passe seul de 1 h à 5 min hors forfait ; le réglage `promptCacheTtl`, les prix, ce qui reste à vérifier ; 21/11 : sous-agents aussi à 1 h (`subagentPromptCacheTtl`). |
 | [`probes/vm_survey.sh`](probes/vm_survey.sh) | **À lancer en début de session.** Relevé d'état + canari de survie du workdir. |
 | [`probes/tunnel_probe.sh`](probes/tunnel_probe.sh) | ports ouverts en sortie, UDP, et le verdict Tailscale / Cloudflare Tunnel (`--full` lance les deux clients) |
 | [`probes/webgpu_probe.mjs`](probes/webgpu_probe.mjs) | WebGPU (adapter, compute WGSL, textures) + inventaire WebCodecs |
